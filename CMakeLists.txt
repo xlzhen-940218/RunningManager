@@ -28,6 +28,7 @@ target_sources(RunningManager PRIVATE
     src/ProcessManager.h
     src/UIManager.cpp
     src/UIManager.h
+    src/SystemMonitor.cpp
 )
 
 # ImGui sources (since ImGui doesn't provide a CMake target natively that includes backends by default)
@@ -54,4 +55,5 @@ target_link_libraries(RunningManager PRIVATE
     psapi
     wtsapi32
     version
+    pdh
 )

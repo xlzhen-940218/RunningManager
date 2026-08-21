@@ -7,6 +7,7 @@
 #include <chrono>
 
 #include "ProcessManager.h"
+#include "SystemMonitor.h"
 #include "UIManager.h"
 
 // Data
@@ -47,8 +48,8 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
     // Create application window
     WNDCLASSEXW wc = { sizeof(wc), CS_CLASSDC, WndProc, 0L, 0L, GetModuleHandle(nullptr), nullptr, nullptr, nullptr, nullptr, L"RunningManagerClass", nullptr };
     ::RegisterClassExW(&wc);
-    int windowWidth = 1024;
-    int windowHeight = 768;
+    int windowWidth = 960;
+    int windowHeight = 720;
     HWND hwnd = ::CreateWindowW(wc.lpszClassName, L"RunningManager - Process Explorer", WS_OVERLAPPEDWINDOW, 100, 100, windowWidth, windowHeight, nullptr, nullptr, wc.hInstance, nullptr);
 
     // Initialize Direct3D
@@ -102,7 +103,9 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 
     ProcessManager processManager;
     processManager.Init(g_pd3dDevice);
-    UIManager uiManager(&processManager);
+    SystemMonitor systemMonitor;
+    systemMonitor.Init(g_pd3dDevice);
+    UIManager uiManager(&processManager, &systemMonitor);
 
     // Initial refresh
     processManager.RefreshProcesses();
@@ -128,6 +131,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
         auto now = std::chrono::steady_clock::now();
         if (std::chrono::duration_cast<std::chrono::milliseconds>(now - lastRefresh).count() > 1000) {
             processManager.RefreshProcesses();
+            systemMonitor.Update();
             lastRefresh = now;
         }
 

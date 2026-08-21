@@ -4,8 +4,8 @@
 #include <sstream>
 #include <iomanip>
 
-UIManager::UIManager(ProcessManager* processManager)
-    : m_processManager(processManager), m_firstFrame(true), m_currentTheme(Theme::LightBlue), m_themeChanged(true) {
+UIManager::UIManager(ProcessManager* processManager, SystemMonitor* systemMonitor)
+    : m_processManager(processManager), m_systemMonitor(systemMonitor), m_firstFrame(true), m_currentTheme(Theme::LightBlue), m_themeChanged(true) {
     memset(m_searchBuffer, 0, sizeof(m_searchBuffer));
 }
 
@@ -116,16 +116,25 @@ void UIManager::Render() {
     ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0.0f);
     ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(10.0f, 10.0f));
     
-    ImGui::Begin("Main Window", nullptr, window_flags);
+    if (ImGui::Begin("Main Window", nullptr, window_flags)) {
+        // Layout: Two columns using child windows
+        ImGui::BeginChild("LeftPanel", ImVec2(140, 0), true);
+        RenderSystemInfoPanel();
+        ImGui::EndChild();
+
+        ImGui::SameLine();
+
+        ImGui::BeginChild("RightPanel", ImVec2(0, 0), false);
+        RenderTopBar();
+        ImGui::Separator();
+        RenderProcessTable();
+        ImGui::EndChild();
+    }
+    ImGui::End();
+    
     ImGui::PopStyleVar(3);
 
-    RenderTopBar();
-    ImGui::Spacing();
-    ImGui::Separator();
-    ImGui::Spacing();
-    RenderProcessTable();
-
-    ImGui::End();
+    if (m_firstFrame) m_firstFrame = false;
 }
 
 void UIManager::RenderTopBar() {
@@ -160,10 +169,119 @@ void UIManager::RenderTopBar() {
     ImGui::PopStyleColor(1);
 }
 
+void UIManager::RenderSystemInfoPanel() {
+    ImGui::PushFont(ImGui::GetIO().Fonts->Fonts[0]); // Use default font
+    
+    ImGui::TextDisabled("SYSTEM SUMMARY");
+    ImGui::Spacing();
+    ImGui::Separator();
+    ImGui::Spacing();
+
+    auto DrawWaterBucket = [&](const char* label, double percentage, const ImVec4& color, const char* primaryText, const char* detailText) {
+        ImGui::BeginGroup();
+        float panelWidth = ImGui::GetContentRegionAvail().x;
+        float width = 80.0f;
+        float height = 80.0f;
+        float offsetX = (panelWidth - width) * 0.5f;
+
+        // Center Label
+        ImVec2 labelSize = ImGui::CalcTextSize(label);
+        ImGui::SetCursorPosX(ImGui::GetCursorPosX() + (panelWidth - labelSize.x) * 0.5f);
+        ImGui::TextUnformatted(label);
+        ImGui::Spacing();
+        
+        ImGui::SetCursorPosX(ImGui::GetCursorPosX() + offsetX);
+        ImVec2 p = ImGui::GetCursorScreenPos();
+        
+        ImDrawList* drawList = ImGui::GetWindowDrawList();
+        
+        // Background
+        ImVec4 bgColor = ImVec4(0.9f, 0.9f, 0.9f, 1.0f);
+        if (m_currentTheme == Theme::LightPink) bgColor = ImVec4(0.95f, 0.9f, 0.9f, 1.0f);
+        drawList->AddRectFilled(p, ImVec2(p.x + width, p.y + height), ImGui::GetColorU32(bgColor), 8.0f);
+        
+        // Fill
+        float fillHeight = height * (float)(percentage / 100.0f);
+        if (fillHeight > 0.0f) {
+            ImDrawFlags flags = ImDrawFlags_RoundCornersBottom;
+            if (fillHeight >= height - 1.0f) flags = ImDrawFlags_RoundCornersAll;
+            drawList->AddRectFilled(ImVec2(p.x, p.y + height - fillHeight), ImVec2(p.x + width, p.y + height), ImGui::GetColorU32(color), 8.0f, flags);
+        }
+        
+        // Border
+        drawList->AddRect(p, ImVec2(p.x + width, p.y + height), ImGui::GetColorU32(ImVec4(0.8f, 0.8f, 0.8f, 1.0f)), 8.0f, 0, 1.0f);
+        
+        // Text overlay
+        ImVec2 textSize = ImGui::CalcTextSize(primaryText);
+        drawList->AddText(ImVec2(p.x + (width - textSize.x) * 0.5f, p.y + (height - textSize.y) * 0.5f), ImGui::GetColorU32(ImVec4(0.1f, 0.1f, 0.1f, 1.0f)), primaryText);
+        
+        ImGui::Dummy(ImVec2(width, height));
+        
+        // Detail text (wrapped and optionally centered)
+        ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.5f, 0.5f, 0.5f, 1.0f));
+        // Simple centering for detail text by calculating its width, if it doesn't wrap too much
+        ImVec2 detailSize = ImGui::CalcTextSize(detailText);
+        if (detailSize.x < panelWidth) {
+            ImGui::SetCursorPosX(ImGui::GetCursorPosX() + (panelWidth - detailSize.x) * 0.5f);
+            ImGui::TextUnformatted(detailText);
+        } else {
+            ImGui::PushTextWrapPos(ImGui::GetCursorPos().x + panelWidth - 10.0f);
+            ImGui::TextWrapped("%s", detailText);
+            ImGui::PopTextWrapPos();
+        }
+        ImGui::PopStyleColor();
+        
+        ImGui::EndGroup();
+    };
+
+    ImVec4 cpuColor(0.2f, 0.6f, 0.9f, 1.0f);
+    ImVec4 memColor(0.6f, 0.2f, 0.9f, 1.0f);
+    ImVec4 diskColor(0.2f, 0.8f, 0.4f, 1.0f);
+    ImVec4 gpuColor(0.9f, 0.4f, 0.2f, 1.0f);
+
+    // CPU
+    char cpuBuf[32];
+    snprintf(cpuBuf, sizeof(cpuBuf), "%.1f %%", m_systemMonitor->GetTotalCpuUsage());
+    DrawWaterBucket("CPU", m_systemMonitor->GetTotalCpuUsage(), cpuColor, cpuBuf, m_systemMonitor->GetCpuName().c_str());
+    ImGui::Spacing();
+    ImGui::Spacing();
+
+    // Memory
+    char memBuf[64];
+    snprintf(memBuf, sizeof(memBuf), "%.1f %%", m_systemMonitor->GetTotalMemoryUsage());
+    std::string memDetail = FormatBytes(m_systemMonitor->GetTotalMemoryBytes()) + " Total";
+    DrawWaterBucket("Memory", m_systemMonitor->GetTotalMemoryUsage(), memColor, memBuf, memDetail.c_str());
+    ImGui::Spacing();
+    ImGui::Spacing();
+
+    // Disks
+    const auto& disks = m_systemMonitor->GetDisks();
+    for (const auto& disk : disks) {
+        char diskBuf[32];
+        snprintf(diskBuf, sizeof(diskBuf), "%.1f %%", disk.usagePercentage);
+        std::string diskLabel = "Disk " + disk.name;
+        std::string diskDetail = FormatBytes(disk.totalBytes - disk.freeBytes) + " / " + FormatBytes(disk.totalBytes);
+        DrawWaterBucket(diskLabel.c_str(), disk.usagePercentage, diskColor, diskBuf, diskDetail.c_str());
+        ImGui::Spacing();
+        ImGui::Spacing();
+    }
+
+    // GPU
+    char gpuBuf[32];
+    snprintf(gpuBuf, sizeof(gpuBuf), "%.1f %%", m_systemMonitor->GetTotalGpuUsage());
+    std::string gpuDetail = m_systemMonitor->GetGpuName();
+    if (m_systemMonitor->GetGpuDedicatedMemory() > 0) {
+        gpuDetail += "\n" + FormatBytes(m_systemMonitor->GetGpuDedicatedMemory()) + " VRAM";
+    }
+    DrawWaterBucket("GPU", m_systemMonitor->GetTotalGpuUsage(), gpuColor, gpuBuf, gpuDetail.c_str());
+
+    ImGui::PopFont();
+}
+
 void UIManager::RenderProcessTable() {
     static ImGuiTableFlags flags = ImGuiTableFlags_Resizable | ImGuiTableFlags_Reorderable | ImGuiTableFlags_Hideable | ImGuiTableFlags_Sortable | ImGuiTableFlags_SortMulti | ImGuiTableFlags_RowBg | ImGuiTableFlags_BordersOuter | ImGuiTableFlags_BordersV | ImGuiTableFlags_ScrollY;
 
-    if (ImGui::BeginTable("ProcessTableV2", 8, flags)) {
+    if (ImGui::BeginTable("ProcessTableV3", 7, flags)) {
         ImGui::TableSetupScrollFreeze(0, 1); // Make top row always visible
         ImGui::TableSetupColumn("Icon", ImGuiTableColumnFlags_NoSort | ImGuiTableColumnFlags_WidthFixed, 32.0f);
         ImGui::TableSetupColumn("Name", ImGuiTableColumnFlags_DefaultSort | ImGuiTableColumnFlags_WidthStretch);
@@ -172,7 +290,6 @@ void UIManager::RenderProcessTable() {
         ImGui::TableSetupColumn("Username", ImGuiTableColumnFlags_WidthFixed, 80.0f);
         ImGui::TableSetupColumn("CPU", ImGuiTableColumnFlags_WidthFixed, 60.0f);
         ImGui::TableSetupColumn("Memory", ImGuiTableColumnFlags_WidthFixed, 80.0f);
-        ImGui::TableSetupColumn("Actions", ImGuiTableColumnFlags_NoSort | ImGuiTableColumnFlags_WidthFixed, 180.0f);
         ImGui::TableHeadersRow();
 
         auto CenterText = [](const char* text) {
@@ -245,8 +362,31 @@ void UIManager::RenderProcessTable() {
                 ImGui::PushID(proc->pid);
                 ImGui::TableNextRow();
                 
-                // 0: Icon
+                if (proc->hasMainWindow) {
+                    ImVec4 highlightColor;
+                    if (m_currentTheme == Theme::LightPink) highlightColor = ImVec4(0.9f, 0.3f, 0.5f, 0.08f);
+                    else highlightColor = ImVec4(0.1f, 0.5f, 0.9f, 0.08f); // LightBlue default
+                    ImGui::TableSetBgColor(ImGuiTableBgTarget_RowBg0, ImGui::GetColorU32(highlightColor));
+                }
+
+                // 1: Icon & Context Menu
                 ImGui::TableSetColumnIndex(0);
+                
+                ImVec2 cursorPos = ImGui::GetCursorPos();
+                ImGui::Selectable("##rowSelectable", false, ImGuiSelectableFlags_SpanAllColumns | ImGuiSelectableFlags_AllowItemOverlap | ImGuiSelectableFlags_AllowDoubleClick);
+                if (ImGui::BeginPopupContextItem("ActionsPopup")) {
+                    if (proc->hasMainWindow) {
+                        if (ImGui::MenuItem("Bring to Front")) { ProcessManager::BringToFront(proc->pid); }
+                    }
+                    if (ImGui::MenuItem("Open File Location")) { ProcessManager::OpenFileLocation(proc->fullPath); }
+                    ImGui::Separator();
+                    ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 0.2f, 0.2f, 1.0f));
+                    if (ImGui::MenuItem("Kill Process")) { ProcessManager::KillProcess(proc->pid); }
+                    ImGui::PopStyleColor();
+                    ImGui::EndPopup();
+                }
+                ImGui::SetCursorPos(cursorPos);
+                
                 if (proc->iconTexture) {
                     ImGui::Image((void*)proc->iconTexture, ImVec2(24, 24));
                 }
@@ -287,41 +427,6 @@ void UIManager::RenderProcessTable() {
                 ImGui::TableSetColumnIndex(6);
                 CenterText(FormatBytes(proc->memoryUsageBytes).c_str());
                 
-                // 7: Actions
-                ImGui::TableSetColumnIndex(7);
-                
-                ImVec2 btnSizeFront(50, 0);
-                ImVec2 btnSizeLocate(60, 0);
-                ImVec2 btnSizeKill(50, 0);
-
-                // Push white text color for all action buttons
-                ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 1.0f, 1.0f, 1.0f));
-
-                if (proc->hasMainWindow) {
-                    if (ImGui::Button("Front", btnSizeFront)) {
-                        ProcessManager::BringToFront(proc->pid);
-                    }
-                } else {
-                    // Reserve space but pop text color so it doesn't affect dummy (though dummy has no text)
-                    ImGui::Dummy(btnSizeFront);
-                }
-                ImGui::SameLine();
-                
-                if (ImGui::Button("Locate", btnSizeLocate)) {
-                    ProcessManager::OpenFileLocation(proc->fullPath);
-                }
-                ImGui::SameLine();
-                
-                ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.9f, 0.2f, 0.2f, 1.0f));
-                ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(1.0f, 0.3f, 0.3f, 1.0f));
-                ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.8f, 0.1f, 0.1f, 1.0f));
-                if (ImGui::Button("Kill", btnSizeKill)) {
-                    ProcessManager::KillProcess(proc->pid);
-                }
-                ImGui::PopStyleColor(3);
-                
-                ImGui::PopStyleColor(1); // Pop Text color
-
                 ImGui::PopID();
             }
         }
