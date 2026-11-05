@@ -9,6 +9,7 @@
 #include "ProcessManager.h"
 #include "SystemMonitor.h"
 #include "UIManager.h"
+#include "resource.h"
 
 // Data
 static ID3D11Device*            g_pd3dDevice = nullptr;
@@ -45,12 +46,23 @@ static BOOL CALLBACK MonitorEnumProc(HMONITOR hMonitor, HDC hdcMonitor, LPRECT l
 // Main code
 int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine, int nShowCmd)
 {
+    HINSTANCE hInst = (hInstance != nullptr) ? hInstance : GetModuleHandle(nullptr);
+    HICON hIcon = (HICON)LoadImageW(hInst, MAKEINTRESOURCEW(IDI_APP_ICON), IMAGE_ICON, 0, 0, LR_DEFAULTSIZE | LR_SHARED);
+    HICON hIconSm = (HICON)LoadImageW(hInst, MAKEINTRESOURCEW(IDI_APP_ICON), IMAGE_ICON, GetSystemMetrics(SM_CXSMICON), GetSystemMetrics(SM_CYSMICON), LR_SHARED);
+
     // Create application window
-    WNDCLASSEXW wc = { sizeof(wc), CS_CLASSDC, WndProc, 0L, 0L, GetModuleHandle(nullptr), nullptr, nullptr, nullptr, nullptr, L"RunningManagerClass", nullptr };
+    WNDCLASSEXW wc = { sizeof(wc), CS_CLASSDC, WndProc, 0L, 0L, hInst, hIcon, nullptr, nullptr, nullptr, L"RunningManagerClass", hIconSm };
     ::RegisterClassExW(&wc);
-    int windowWidth = 960;
+    int windowWidth = 1020;
     int windowHeight = 720;
     HWND hwnd = ::CreateWindowW(wc.lpszClassName, L"RunningManager - Process Explorer", WS_OVERLAPPEDWINDOW, 100, 100, windowWidth, windowHeight, nullptr, nullptr, wc.hInstance, nullptr);
+
+    if (hIcon) {
+        ::SendMessageW(hwnd, WM_SETICON, ICON_BIG, (LPARAM)hIcon);
+    }
+    if (hIconSm) {
+        ::SendMessageW(hwnd, WM_SETICON, ICON_SMALL, (LPARAM)hIconSm);
+    }
 
     // Initialize Direct3D
     if (!CreateDeviceD3D(hwnd))
@@ -101,11 +113,16 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
     ImGui_ImplWin32_Init(hwnd);
     ImGui_ImplDX11_Init(g_pd3dDevice, g_pd3dDeviceContext);
 
+    ID3D11ShaderResourceView* appIconTexture = nullptr;
+    if (hIcon) {
+        appIconTexture = ProcessManager::CreateTextureFromIcon(g_pd3dDevice, hIcon);
+    }
+
     ProcessManager processManager;
     processManager.Init(g_pd3dDevice);
     SystemMonitor systemMonitor;
     systemMonitor.Init(g_pd3dDevice);
-    UIManager uiManager(&processManager, &systemMonitor);
+    UIManager uiManager(&processManager, &systemMonitor, appIconTexture);
 
     // Initial refresh
     processManager.RefreshProcesses();
@@ -154,6 +171,11 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
     }
 
     // Cleanup
+    if (appIconTexture) {
+        appIconTexture->Release();
+        appIconTexture = nullptr;
+    }
+
     ImGui_ImplDX11_Shutdown();
     ImGui_ImplWin32_Shutdown();
     ImGui::DestroyContext();

@@ -1,0 +1,4 @@
+#include "resource.h"
+
+// Set application icon (Lowest ID will be default exe icon in Windows Explorer)
+IDI_APP_ICON ICON "RunningManager.ico"

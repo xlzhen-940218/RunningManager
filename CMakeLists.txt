@@ -29,6 +29,8 @@ target_sources(RunningManager PRIVATE
     src/UIManager.cpp
     src/UIManager.h
     src/SystemMonitor.cpp
+    src/resource.h
+    src/RunningManager.rc
 )
 
 # ImGui sources (since ImGui doesn't provide a CMake target natively that includes backends by default)

@@ -14,6 +14,7 @@ struct ProcessInfo {
     
     bool isNotResponding;
     bool hasMainWindow;
+    bool isAdmin;
     
     double cpuUsage;
     SIZE_T memoryUsageBytes;
@@ -38,6 +39,7 @@ public:
     static void KillProcess(DWORD pid);
     static void BringToFront(DWORD pid);
     static void OpenFileLocation(const std::wstring& path);
+    static ID3D11ShaderResourceView* CreateTextureFromIcon(ID3D11Device* device, HICON hIcon);
 
 private:
     std::vector<ProcessInfo> m_processList;
@@ -48,6 +50,8 @@ private:
     
     ID3D11ShaderResourceView* GetOrLoadIcon(const std::wstring& path);
     std::wstring GetProcessUsername(HANDLE hProcess);
+    bool CheckIsAdmin(HANDLE hProcess);
+    static void EnableDebugPrivilege();
     bool CheckNotResponding(DWORD pid);
     void CleanupIcons();
 };

@@ -10,7 +10,7 @@
 #pragma comment(lib, "wtsapi32.lib")
 
 // Helper function to create ID3D11ShaderResourceView from HICON
-static ID3D11ShaderResourceView* CreateTextureFromIcon(ID3D11Device* device, HICON hIcon) {
+ID3D11ShaderResourceView* ProcessManager::CreateTextureFromIcon(ID3D11Device* device, HICON hIcon) {
     if (!hIcon || !device) return nullptr;
 
     ICONINFO iconInfo;
@@ -111,6 +111,7 @@ ProcessManager::~ProcessManager() {
 
 void ProcessManager::Init(ID3D11Device* device) {
     m_d3dDevice = device;
+    EnableDebugPrivilege();
 }
 
 void ProcessManager::CleanupIcons() {
@@ -182,6 +183,37 @@ std::wstring ProcessManager::GetProcessUsername(HANDLE hProcess) {
     return L"";
 }
 
+bool ProcessManager::CheckIsAdmin(HANDLE hProcess) {
+    if (!hProcess) return false;
+    HANDLE hToken = nullptr;
+    if (!OpenProcessToken(hProcess, TOKEN_QUERY, &hToken)) {
+        return false;
+    }
+
+    TOKEN_ELEVATION elevation = {};
+    DWORD dwSize = sizeof(TOKEN_ELEVATION);
+    bool isElevated = false;
+    if (GetTokenInformation(hToken, TokenElevation, &elevation, sizeof(elevation), &dwSize)) {
+        isElevated = (elevation.TokenIsElevated != 0);
+    }
+
+    CloseHandle(hToken);
+    return isElevated;
+}
+
+void ProcessManager::EnableDebugPrivilege() {
+    HANDLE hToken = nullptr;
+    if (OpenProcessToken(GetCurrentProcess(), TOKEN_ADJUST_PRIVILEGES | TOKEN_QUERY, &hToken)) {
+        TOKEN_PRIVILEGES tp = {};
+        tp.PrivilegeCount = 1;
+        tp.Privileges[0].Attributes = SE_PRIVILEGE_ENABLED;
+        if (LookupPrivilegeValueW(nullptr, L"SeDebugPrivilege", &tp.Privileges[0].Luid)) {
+            AdjustTokenPrivileges(hToken, FALSE, &tp, sizeof(tp), nullptr, nullptr);
+        }
+        CloseHandle(hToken);
+    }
+}
+
 bool ProcessManager::CheckNotResponding(DWORD pid) {
     // This is a simplified check. A full implementation would find the main window
     // and use SendMessageTimeout with WM_NULL to see if it responds.
@@ -247,6 +279,9 @@ void ProcessManager::RefreshProcesses() {
 
             // Get Username
             info.username = GetProcessUsername(hProcess);
+
+            // Get Admin Status
+            info.isAdmin = CheckIsAdmin(hProcess);
 
             // CPU Usage calculation
             FILETIME ftCreation, ftExit, ftKernel, ftUser;

@@ -4,8 +4,8 @@
 #include <sstream>
 #include <iomanip>
 
-UIManager::UIManager(ProcessManager* processManager, SystemMonitor* systemMonitor)
-    : m_processManager(processManager), m_systemMonitor(systemMonitor), m_firstFrame(true), m_currentTheme(Theme::LightBlue), m_themeChanged(true) {
+UIManager::UIManager(ProcessManager* processManager, SystemMonitor* systemMonitor, ID3D11ShaderResourceView* appIcon)
+    : m_processManager(processManager), m_systemMonitor(systemMonitor), m_appIcon(appIcon), m_firstFrame(true), m_currentTheme(Theme::LightBlue), m_themeChanged(true) {
     memset(m_searchBuffer, 0, sizeof(m_searchBuffer));
 }
 
@@ -172,6 +172,24 @@ void UIManager::RenderTopBar() {
 void UIManager::RenderSystemInfoPanel() {
     ImGui::PushFont(ImGui::GetIO().Fonts->Fonts[0]); // Use default font
     
+    if (m_appIcon) {
+        float panelWidth = ImGui::GetContentRegionAvail().x;
+        float iconSize = 40.0f;
+        float offsetX = (panelWidth - iconSize) * 0.5f;
+        ImGui::SetCursorPosX(ImGui::GetCursorPosX() + offsetX);
+        ImGui::Image((void*)m_appIcon, ImVec2(iconSize, iconSize));
+        
+        ImVec2 titleSize = ImGui::CalcTextSize("RunningManager");
+        ImGui::SetCursorPosX(ImGui::GetCursorPosX() + (panelWidth - titleSize.x) * 0.5f);
+        ImVec4 brandColor = (m_currentTheme == Theme::LightPink) 
+            ? ImVec4(0.95f, 0.45f, 0.55f, 1.0f) 
+            : ImVec4(0.06f, 0.37f, 0.96f, 1.0f);
+        ImGui::TextColored(brandColor, "RunningManager");
+        ImGui::Spacing();
+        ImGui::Separator();
+        ImGui::Spacing();
+    }
+
     ImGui::TextDisabled("SYSTEM SUMMARY");
     ImGui::Spacing();
     ImGui::Separator();
@@ -281,13 +299,14 @@ void UIManager::RenderSystemInfoPanel() {
 void UIManager::RenderProcessTable() {
     static ImGuiTableFlags flags = ImGuiTableFlags_Resizable | ImGuiTableFlags_Reorderable | ImGuiTableFlags_Hideable | ImGuiTableFlags_Sortable | ImGuiTableFlags_SortMulti | ImGuiTableFlags_RowBg | ImGuiTableFlags_BordersOuter | ImGuiTableFlags_BordersV | ImGuiTableFlags_ScrollY;
 
-    if (ImGui::BeginTable("ProcessTableV3", 7, flags)) {
+    if (ImGui::BeginTable("ProcessTableV4", 8, flags)) {
         ImGui::TableSetupScrollFreeze(0, 1); // Make top row always visible
         ImGui::TableSetupColumn("Icon", ImGuiTableColumnFlags_NoSort | ImGuiTableColumnFlags_WidthFixed, 32.0f);
         ImGui::TableSetupColumn("Name", ImGuiTableColumnFlags_DefaultSort | ImGuiTableColumnFlags_WidthStretch);
         ImGui::TableSetupColumn("PID", ImGuiTableColumnFlags_WidthFixed, 60.0f);
         ImGui::TableSetupColumn("Status", ImGuiTableColumnFlags_WidthFixed, 100.0f);
         ImGui::TableSetupColumn("Username", ImGuiTableColumnFlags_WidthFixed, 80.0f);
+        ImGui::TableSetupColumn("IsAdmin", ImGuiTableColumnFlags_WidthFixed, 65.0f);
         ImGui::TableSetupColumn("CPU", ImGuiTableColumnFlags_WidthFixed, 60.0f);
         ImGui::TableSetupColumn("Memory", ImGuiTableColumnFlags_WidthFixed, 80.0f);
         ImGui::TableHeadersRow();
@@ -324,10 +343,12 @@ void UIManager::RenderProcessTable() {
                 std::transform(username.begin(), username.end(), username.begin(), ::tolower);
                 
                 std::string pidStr = std::to_string(proc.pid);
-                
+                bool matchesAdmin = proc.isAdmin && (m_searchQuery == "admin" || m_searchQuery == "isadmin" || m_searchQuery == "yes");
+
                 if (name.find(m_searchQuery) == std::string::npos && 
                     username.find(m_searchQuery) == std::string::npos &&
-                    pidStr.find(m_searchQuery) == std::string::npos) {
+                    pidStr.find(m_searchQuery) == std::string::npos &&
+                    !matchesAdmin) {
                     continue;
                 }
             }
@@ -345,8 +366,9 @@ void UIManager::RenderProcessTable() {
                     case 2: delta = (a->pid > b->pid) ? 1 : ((a->pid < b->pid) ? -1 : 0); break; // PID
                     case 3: delta = (a->isNotResponding > b->isNotResponding) ? 1 : ((a->isNotResponding < b->isNotResponding) ? -1 : 0); break; // Status
                     case 4: delta = a->username.compare(b->username); break; // Username
-                    case 5: delta = (a->cpuUsage > b->cpuUsage) ? 1 : ((a->cpuUsage < b->cpuUsage) ? -1 : 0); break; // CPU
-                    case 6: delta = (a->memoryUsageBytes > b->memoryUsageBytes) ? 1 : ((a->memoryUsageBytes < b->memoryUsageBytes) ? -1 : 0); break; // Mem
+                    case 5: delta = (a->isAdmin > b->isAdmin) ? 1 : ((a->isAdmin < b->isAdmin) ? -1 : 0); break; // IsAdmin
+                    case 6: delta = (a->cpuUsage > b->cpuUsage) ? 1 : ((a->cpuUsage < b->cpuUsage) ? -1 : 0); break; // CPU
+                    case 7: delta = (a->memoryUsageBytes > b->memoryUsageBytes) ? 1 : ((a->memoryUsageBytes < b->memoryUsageBytes) ? -1 : 0); break; // Mem
                     default: break;
                 }
                 return descending ? (delta > 0) : (delta < 0);
@@ -369,7 +391,7 @@ void UIManager::RenderProcessTable() {
                     ImGui::TableSetBgColor(ImGuiTableBgTarget_RowBg0, ImGui::GetColorU32(highlightColor));
                 }
 
-                // 1: Icon & Context Menu
+                // 0: Icon & Context Menu
                 ImGui::TableSetColumnIndex(0);
                 
                 ImVec2 cursorPos = ImGui::GetCursorPos();
@@ -413,8 +435,16 @@ void UIManager::RenderProcessTable() {
                 ImGui::TableSetColumnIndex(4);
                 CenterText(WStringToString(proc->username).c_str());
 
-                // 5: CPU
+                // 5: IsAdmin
                 ImGui::TableSetColumnIndex(5);
+                if (proc->isAdmin) {
+                    CenterTextColored(ImVec4(0.1f, 0.6f, 0.1f, 1.0f), "Yes");
+                } else {
+                    CenterTextColored(ImVec4(0.55f, 0.55f, 0.55f, 1.0f), "No");
+                }
+
+                // 6: CPU
+                ImGui::TableSetColumnIndex(6);
                 if (proc->validTime) {
                     char cpuBuf[32];
                     snprintf(cpuBuf, sizeof(cpuBuf), "%.1f%%", proc->cpuUsage);
@@ -423,8 +453,8 @@ void UIManager::RenderProcessTable() {
                     CenterText("-");
                 }
 
-                // 6: Memory
-                ImGui::TableSetColumnIndex(6);
+                // 7: Memory
+                ImGui::TableSetColumnIndex(7);
                 CenterText(FormatBytes(proc->memoryUsageBytes).c_str());
                 
                 ImGui::PopID();
