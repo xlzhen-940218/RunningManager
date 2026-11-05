@@ -113,7 +113,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
     ImGui_ImplWin32_Init(hwnd);
     ImGui_ImplDX11_Init(g_pd3dDevice, g_pd3dDeviceContext);
 
-    ID3D11ShaderResourceView* appIconTexture = nullptr;
+    ImTextureID appIconTexture = (ImTextureID)0;
     if (hIcon) {
         appIconTexture = ProcessManager::CreateTextureFromIcon(g_pd3dDevice, hIcon);
     }
@@ -172,8 +172,8 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 
     // Cleanup
     if (appIconTexture) {
-        appIconTexture->Release();
-        appIconTexture = nullptr;
+        reinterpret_cast<ID3D11ShaderResourceView*>(appIconTexture)->Release();
+        appIconTexture = (ImTextureID)0;
     }
 
     ImGui_ImplDX11_Shutdown();

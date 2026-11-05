@@ -2,15 +2,17 @@
 
 #include "ProcessManager.h"
 #include "SystemMonitor.h"
+
 #include <string>
 
 class UIManager {
 public:
-    UIManager(ProcessManager* processManager, SystemMonitor* systemMonitor, ID3D11ShaderResourceView* appIcon = nullptr);
+    UIManager(ProcessManager* processManager, SystemMonitor* systemMonitor,
+              ImTextureID appIcon = (ImTextureID)0);
     ~UIManager();
 
     void Render();
-    void SetAppIcon(ID3D11ShaderResourceView* appIcon) { m_appIcon = appIcon; }
+    void SetAppIcon(ImTextureID appIcon) { m_appIcon = appIcon; }
 
     enum class Theme {
         LightBlue,
@@ -20,21 +22,23 @@ public:
 
 private:
     ProcessManager* m_processManager;
-    SystemMonitor* m_systemMonitor;
-    ID3D11ShaderResourceView* m_appIcon;
-    std::string m_searchQuery;
-    char m_searchBuffer[256];
-    Theme m_currentTheme;
-    bool m_themeChanged;
-    
-    // Config
+    SystemMonitor*  m_systemMonitor;
+    ImTextureID     m_appIcon;
+    std::string     m_searchQuery;
+    char            m_searchBuffer[256] = {};
+    Theme           m_currentTheme;
+    bool            m_themeChanged;
+
     bool m_firstFrame;
 
     void RenderTopBar();
     void RenderSystemInfoPanel();
     void RenderProcessTable();
-    
-    // Helpers
-    std::string WStringToString(const std::wstring& wstr);
-    std::string FormatBytes(SIZE_T bytes);
+
+    std::string FormatBytes(uint64_t bytes) const;
+    static const char* StatusText(const ProcessInfo& proc, ImVec4& color);
+    static void DrawCenteredText(const char* text);
+    static void DrawCenteredTextColored(const ImVec4& color, const char* text);
+    void DrawAppIconFallback(float size) const;
+    void DrawProcessIconFallback(const ProcessInfo& proc, float size) const;
 };

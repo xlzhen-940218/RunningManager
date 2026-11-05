@@ -1,16 +1,20 @@
 #pragma once
 
+#include <cstdint>
+#include <string>
+#include <vector>
+
+#ifdef _WIN32
 #include <windows.h>
 #include <pdh.h>
 #include <d3d11.h>
-#include <vector>
-#include <string>
+#endif
 
 struct DiskInfo {
     std::string name;
-    SIZE_T totalBytes;
-    SIZE_T freeBytes;
-    double usagePercentage;
+    uint64_t    totalBytes       = 0;
+    uint64_t    freeBytes        = 0;
+    double      usagePercentage  = 0.0;
 };
 
 class SystemMonitor {
@@ -18,46 +22,59 @@ public:
     SystemMonitor();
     ~SystemMonitor();
 
+#ifdef _WIN32
     void Init(ID3D11Device* device);
+#else
+    void Init();
+#endif
     void Update();
 
     double GetTotalCpuUsage() const { return m_totalCpuUsage; }
     double GetTotalMemoryUsage() const { return m_totalMemoryUsage; }
     const std::vector<DiskInfo>& GetDisks() const { return m_disks; }
     double GetTotalGpuUsage() const { return m_totalGpuUsage; }
-    
-    SIZE_T GetTotalMemoryBytes() const { return m_totalMemoryBytes; }
-    SIZE_T GetUsedMemoryBytes() const { return m_usedMemoryBytes; }
+    bool   IsGpuUsageAvailable() const { return m_gpuUsageAvailable; }
+
+    uint64_t GetTotalMemoryBytes() const { return m_totalMemoryBytes; }
+    uint64_t GetUsedMemoryBytes() const { return m_usedMemoryBytes; }
 
     const std::string& GetCpuName() const { return m_cpuName; }
     const std::string& GetGpuName() const { return m_gpuName; }
-    SIZE_T GetGpuDedicatedMemory() const { return m_gpuDedicatedMemoryBytes; }
+    uint64_t GetGpuDedicatedMemory() const { return m_gpuDedicatedMemoryBytes; }
 
 private:
     // CPU
-    ULARGE_INTEGER m_prevSysIdle;
-    ULARGE_INTEGER m_prevSysKernel;
-    ULARGE_INTEGER m_prevSysUser;
-    double m_totalCpuUsage;
+    double      m_totalCpuUsage = 0.0;
     std::string m_cpuName;
 
     // Memory
-    double m_totalMemoryUsage;
-    SIZE_T m_totalMemoryBytes;
-    SIZE_T m_usedMemoryBytes;
+    double   m_totalMemoryUsage = 0.0;
+    uint64_t m_totalMemoryBytes = 0;
+    uint64_t m_usedMemoryBytes  = 0;
 
-    // Disk & GPU
-    PDH_HQUERY m_pdhQuery;
-    PDH_HCOUNTER m_gpuCounter;
-    bool m_pdhInitialized;
-    double m_totalGpuUsage;
+    // Disk
     std::vector<DiskInfo> m_disks;
-    
+
+    // GPU
+    double      m_totalGpuUsage           = 0.0;
+    bool        m_gpuUsageAvailable       = false;
     std::string m_gpuName;
-    SIZE_T m_gpuDedicatedMemoryBytes;
-    
+    uint64_t    m_gpuDedicatedMemoryBytes = 0;
+
     void UpdateCpu();
     void UpdateMemory();
     void UpdateDisks();
-    void UpdatePdh();
+    void UpdateGpu();
+
+#ifdef _WIN32
+    ULARGE_INTEGER m_prevSysIdle   = {};
+    ULARGE_INTEGER m_prevSysKernel = {};
+    ULARGE_INTEGER m_prevSysUser   = {};
+    PDH_HQUERY     m_pdhQuery      = nullptr;
+    PDH_HCOUNTER   m_gpuCounter    = nullptr;
+    bool           m_pdhInitialized = false;
+#else
+    uint64_t m_prevCpuTotal = 0;
+    uint64_t m_prevCpuIdle  = 0;
+#endif
 };
