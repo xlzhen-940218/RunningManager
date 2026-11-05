@@ -1,26 +1,28 @@
 # RunningManager
 
-一个使用 Dear ImGui 编写的进程管理器 / 任务管理器，支持 Windows 与 Linux（x86_64 / arm64）。
+**English** | [简体中文](README.zh-CN.md)
 
-![RunningManager 界面](docs/screenshot.png)
+A process manager / task manager built with Dear ImGui, supporting Windows and Linux (x86_64 / arm64).
 
-## 功能
+![RunningManager UI](docs/screenshot.png)
 
-- 实时进程列表：PID、名称、状态、用户名、管理员权限、CPU、内存
-- 按 CPU / 内存 / 名称 / PID 等列排序，支持多列排序
-- 按进程名、用户名、完整路径、PID、状态搜索
-- 右键菜单：窗口置前、打开文件位置、结束进程
-- 系统概览：CPU、内存、磁盘占用、GPU
-- 浅蓝 / 浅粉两套主题
-- 自动查找 Noto CJK / 文泉驿等字体，可正确显示中文进程名
-- Windows：Win32 + Direct3D 11；Linux：SDL2 + OpenGL 3
+## Features
 
-> 已在 Debian GNU/Linux 13 (trixie) aarch64 上完成构建、运行与交互验证；
-> Windows 代码已使用 MinGW-w64 x86_64 交叉编译验证。
+- Live process list: PID, name, status, user, elevated privileges, CPU, memory
+- Sort by CPU / memory / name / PID and more, with multi-column sorting
+- Search by process name, user, full path, PID, or state
+- Context menu: bring window to front, open file location, kill process
+- System overview: CPU, memory, disk usage, GPU
+- Light blue and light pink themes
+- Automatically finds Noto CJK / WenQuanYi and similar fonts to display Chinese process names correctly
+- Windows: Win32 + Direct3D 11; Linux: SDL2 + OpenGL 3
 
-## Linux 构建（Debian / Ubuntu）
+> Built, run, and interactively tested on Debian GNU/Linux 13 (trixie) aarch64;
+> the Windows code has been verified with a MinGW-w64 x86_64 cross-compile.
 
-依赖：
+## Linux Build (Debian / Ubuntu)
+
+Dependencies:
 
 ```bash
 sudo apt install build-essential cmake pkg-config \
@@ -28,16 +30,19 @@ sudo apt install build-essential cmake pkg-config \
     fonts-noto-cjk
 ```
 
-说明：
+Notes:
 
-- 需要 CMake ≥ 3.16、支持 C++17 的编译器、SDL2（建议 ≥ 2.0.16）和 OpenGL。
-- `libx11-dev` 用于 EWMH 的“窗口置前”和“GUI 进程识别”。未安装时仍可编译，
-  置前会退化为调用 `xdotool`（如果系统中有）。
-- `fonts-noto-cjk` 用于中文显示；也可以使用 `fonts-wqy-microhei` 等字体。
-- 首次配置会通过 CMake `FetchContent` 从 GitHub 拉取 Dear ImGui v1.90.1，需要网络。
-  离线构建可指定本地源码：`-DFETCHCONTENT_SOURCE_DIR_IMGUI=/path/to/imgui`。
+- Requires CMake ≥ 3.16, a C++17 compiler, SDL2 (≥ 2.0.16 recommended), and OpenGL.
+- `libx11-dev` provides EWMH support for "bring to front" and GUI-process detection.
+  The build still works without it; bring-to-front then falls back to `xdotool`
+  (if available).
+- `fonts-noto-cjk` is used to display Chinese text; `fonts-wqy-microhei` and similar
+  fonts also work.
+- The first configure downloads Dear ImGui v1.90.1 from GitHub through CMake
+  `FetchContent`, so network access is required. For offline builds, point to a local
+  source tree: `-DFETCHCONTENT_SOURCE_DIR_IMGUI=/path/to/imgui`.
 
-构建与运行：
+Build and run:
 
 ```bash
 cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
@@ -45,33 +50,34 @@ cmake --build build -j"$(nproc)"
 ./build/RunningManager
 ```
 
-安装到系统（只安装可执行文件）：
+Install system-wide (executable only):
 
 ```bash
 sudo cmake --install build --prefix /usr/local
 RunningManager
 ```
 
-## Windows 构建
+## Windows Build
 
 ### Visual Studio / MSVC
 
-需要 Visual Studio 2019/2022，并安装“使用 C++ 的桌面开发”工作负载。在 PowerShell
-（普通 PowerShell 或 Developer PowerShell 均可）中：
+Requires Visual Studio 2019/2022 with the "Desktop development with C++" workload.
+From PowerShell (regular or Developer PowerShell):
 
 ```powershell
 cmake -S . -B build -A x64
 cmake --build build --config Release
 ```
 
-`-A x64` 适用于 Visual Studio 生成器；如果 CMake 默认生成器不是 Visual Studio，
-可以显式指定，例如 `-G "Visual Studio 17 2022" -A x64`。不指定 `-G` 时 CMake 会
-自动选择已安装的最新 Visual Studio 生成器。
-生成的 `RunningManager.exe` 位于 `build/Release/`。
+`-A x64` applies to Visual Studio generators. If CMake's default generator is not
+Visual Studio, specify one explicitly, for example
+`-G "Visual Studio 17 2022" -A x64`. When `-G` is omitted, CMake selects the newest
+installed Visual Studio generator.
+The resulting `RunningManager.exe` is placed in `build/Release/`.
 
 ### MSYS2 / MinGW-w64
 
-在“MSYS2 MINGW64”终端中：
+From the "MSYS2 MINGW64" terminal:
 
 ```bash
 pacman -S --needed mingw-w64-x86_64-gcc make cmake
@@ -80,89 +86,94 @@ cmake --build build -j"$(nproc)"
 ./build/RunningManager.exe
 ```
 
-说明：
+Notes:
 
-- 也可以直接在 MSYS2 的 “MSYS” 终端中运行上面的命令，只要 `PATH` 中能找到
-  MinGW-w64 的 `g++`。项目会自动识别“MSYS 版 CMake + MinGW-w64 编译器”的组合，
-  并把目标平台切换为 Windows。
-- 该组合下请使用默认的 “Unix Makefiles” 生成器，**不要加 `-G Ninja`**
-  （Ninja 不会转换 MSYS 的 POSIX 路径，CMake 会给出明确报错）。
-- 如果 `build/` 是旧版本或旧工具链配置过的，直接重新运行上面的 `cmake` 命令即可；
-  仍报错时删除 `build/` 后重试。
-- `MinGW` 构建会静态链接 MinGW 运行时（libstdc++/libgcc/libwinpthread），
-  生成的 exe 只依赖系统 DLL，可以脱离 MSYS2 环境运行。
+- The commands above also work directly in the MSYS2 "MSYS" terminal, as long as the
+  MinGW-w64 `g++` is on `PATH`. The project detects the "MSYS CMake + MinGW-w64
+  compiler" combination and switches the target platform to Windows.
+- Use the default "Unix Makefiles" generator for this combination; **do not add
+  `-G Ninja`** (Ninja does not translate MSYS POSIX paths, and CMake reports this
+  explicitly).
+- If `build/` was configured by an older version or toolchain, simply re-run the
+  `cmake` command above; if it still fails, delete `build/` and retry.
+- MinGW builds statically link the MinGW runtime (libstdc++/libgcc/libwinpthread), so
+  the executable only depends on system DLLs and can run outside MSYS2.
 
-## 平台差异
+## Platform Differences
 
-| 功能 | Windows | Linux |
+| Feature | Windows | Linux |
 | --- | --- | --- |
-| 进程枚举 | Toolhelp32 + PSAPI | `/proc` |
+| Process enumeration | Toolhelp32 + PSAPI | `/proc` |
 | CPU | `GetSystemTimes` / `GetProcessTimes` | `/proc/stat` / `/proc/<pid>/stat` |
-| 内存 | `GlobalMemoryStatusEx` | `/proc/meminfo` |
-| 磁盘 | `GetLogicalDriveStrings` | `/proc/self/mounts` + `statvfs` |
-| GPU 名称 | DXGI | `glGetString(GL_RENDERER)` |
-| GPU 占用 | PDH GPU Engine 计数器 | AMD `gpu_busy_percent` / NVIDIA `nvidia-smi`，否则显示 N/A |
-| 进程图标 | 可执行文件图标 | 无系统级图标，使用首字母/汉字彩色徽标 |
-| 管理员 | UAC 提升状态 | 有效 UID 为 0（root） |
-| 结束进程 | `TerminateProcess` | `SIGKILL` |
-| 打开文件位置 | 资源管理器 `/select` | `xdg-open` 打开所在目录 |
-| 窗口置前 | `SetForegroundWindow` | X11 EWMH `_NET_ACTIVE_WINDOW`，回退 `xdotool` |
+| Memory | `GlobalMemoryStatusEx` | `/proc/meminfo` |
+| Disks | `GetLogicalDriveStrings` | `/proc/self/mounts` + `statvfs` |
+| GPU name | DXGI | `glGetString(GL_RENDERER)` |
+| GPU usage | PDH GPU Engine counters | AMD `gpu_busy_percent` / NVIDIA `nvidia-smi`, otherwise N/A |
+| Process icon | Executable icon | No system-wide icons; colored initials/CJK badge |
+| Administrator | UAC elevation state | Effective UID 0 (root) |
+| Kill process | `TerminateProcess` | `SIGKILL` |
+| Open file location | Explorer `/select` | `xdg-open` on the containing directory |
+| Bring window to front | `SetForegroundWindow` | X11 EWMH `_NET_ACTIVE_WINDOW`, falling back to `xdotool` |
 
-Linux 说明：
+Linux notes:
 
-- 内核线程会被过滤，不显示在列表中。
-- 进程状态显示为 Running / Sleeping / Disk Wait / Zombie / Stopped 等。
-- 在没有硬件 GPU、使用 llvmpipe 等软件渲染时，界面只在有输入或每秒刷新数据时重绘，
-  以降低 CPU 占用。
-- 窗口设置保存在 `~/.config/runningmanager/imgui.ini`（遵循 `XDG_CONFIG_HOME`）。
-- 程序会优先把窗口放到第二块显示器中央，并保持置顶；只有一块显示器时在主屏居中。
+- Kernel threads are filtered out of the list.
+- Process states are shown as Running / Sleeping / Disk Wait / Zombie / Stopped, etc.
+- Without a hardware GPU (for example, with llvmpipe software rendering), the UI only
+  redraws on input or once per second when data is refreshed, to reduce CPU usage.
+- Window settings are stored in `~/.config/runningmanager/imgui.ini` (honoring
+  `XDG_CONFIG_HOME`).
+- The window is preferably centered on the second monitor and kept on top; with a
+  single monitor it is centered on the primary display.
 
-## 常见问题
+## FAQ
 
-**在 MSYS2 中配置时报 `RunningManager currently supports Windows and Linux only`**
+**`RunningManager currently supports Windows and Linux only` when configuring under MSYS2**
 
-说明当前终端里的 `cmake` 没有配上 Windows 目标编译器。推荐打开“MSYS2 MINGW64”
-终端重新执行构建命令；也可以留在 MSYS 终端，只需确认 `which g++` 指向
-`/mingw64/bin/g++`（必要时执行 `export PATH=/mingw64/bin:$PATH`）。本项目会自动
-识别这种组合；如果仍然失败，删除 `build/` 后重试。
+The `cmake` in the current terminal is not paired with a Windows-target compiler. Open
+the "MSYS2 MINGW64" terminal and re-run the build commands; alternatively, stay in the
+MSYS terminal and make sure `which g++` points to `/mingw64/bin/g++` (run
+`export PATH=/mingw64/bin:$PATH` if needed). The project detects this combination
+automatically; if it still fails, delete `build/` and retry.
 
-**配置时报 `Could NOT find SDL2`**
+**`Could NOT find SDL2` during configure**
 
-安装 `libsdl2-dev`，并确认 `pkg-config --modversion sdl2` 能输出版本号。
+Install `libsdl2-dev` and confirm that `pkg-config --modversion sdl2` prints a version.
 
-**启动时报 `SDL_GL_CreateContext failed`**
+**`SDL_GL_CreateContext failed` at startup**
 
-当前会话可能没有可用的 OpenGL 上下文。先运行 `glxinfo -B` 检查渲染器；
-无硬件加速时通常仍会提供 llvmpipe 软件渲染。远程/无显示环境下需要 X11 或 Wayland 会话。
+The current session may not have a usable OpenGL context. Run `glxinfo -B` to check the
+renderer; llvmpipe software rendering is usually still available without hardware
+acceleration. Remote or headless environments need an X11 or Wayland session.
 
-**中文进程名显示为方块**
+**Chinese process names show up as boxes**
 
-安装任意中文字体即可，例如 `fonts-noto-cjk`、`fonts-wqy-microhei` 或
-`fonts-wqy-zenhei`。程序会自动从常见路径中选择。
+Install any CJK font, such as `fonts-noto-cjk`, `fonts-wqy-microhei`, or
+`fonts-wqy-zenhei`. The program automatically picks one from the usual font paths.
 
-**GPU 显示 N/A**
+**GPU shows N/A**
 
-Linux 没有统一的 GPU 占用接口。程序支持 AMD 的
-`/sys/class/drm/card*/device/gpu_busy_percent` 和 NVIDIA 的 `nvidia-smi`；
-其他驱动（包括 llvmpipe 软件渲染）会如实显示 N/A。
+Linux has no unified GPU-usage interface. The program supports AMD's
+`/sys/class/drm/card*/device/gpu_busy_percent` and NVIDIA's `nvidia-smi`; other drivers
+(including llvmpipe software rendering) are reported as N/A.
 
-## 项目结构
+## Project Structure
 
 ```
 src/
-  main.cpp                  Windows 入口（Win32 + DX11）
-  main_linux.cpp            Linux 入口（SDL2 + OpenGL3）
-  ProcessManager.h          跨平台进程数据接口
-  ProcessManager_win.cpp    Windows 进程实现
-  ProcessManager_linux.cpp  Linux /proc 实现
-  SystemMonitor.h           跨平台系统信息接口
-  SystemMonitor_win.cpp     Windows 系统信息实现
-  SystemMonitor_linux.cpp   Linux 系统信息实现
-  UIManager.cpp/.h          共享 ImGui 界面
+  main.cpp                  Windows entry point (Win32 + DX11)
+  main_linux.cpp            Linux entry point (SDL2 + OpenGL3)
+  ProcessManager.h          Cross-platform process data interface
+  ProcessManager_win.cpp    Windows process implementation
+  ProcessManager_linux.cpp  Linux /proc implementation
+  SystemMonitor.h           Cross-platform system information interface
+  SystemMonitor_win.cpp     Windows system information implementation
+  SystemMonitor_linux.cpp   Linux system information implementation
+  UIManager.cpp/.h          Shared ImGui UI
 docs/
-  screenshot.png            运行截图
+  screenshot.png            Screenshot
 ```
 
-## 许可证
+## License
 
-见 [LICENSE](LICENSE)。
+See [LICENSE](LICENSE).
