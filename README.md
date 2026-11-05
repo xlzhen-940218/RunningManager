@@ -57,6 +57,29 @@ sudo cmake --install build --prefix /usr/local
 RunningManager
 ```
 
+## Debian Package (arm64)
+
+The arm64 package built from this tree is placed in `dist/` when generated:
+
+```bash
+sudo apt install ./dist/runningmanager_1.1.0-1_arm64.deb
+```
+
+The package installs `/usr/bin/runningmanager` (with a `RunningManager`
+compatibility symlink), a desktop entry, hicolor icons, and the
+`runningmanager(1)` manual page.
+
+To rebuild the package from source:
+
+```bash
+sudo apt install debhelper
+dpkg-buildpackage -b -us -uc
+```
+
+The resulting `runningmanager_1.1.0-1_arm64.deb` is written to the parent
+directory. The Debian build uses the vendored Dear ImGui tree in
+`debian/third_party/imgui`, so package builds work offline.
+
 ## Windows Build
 
 ### Visual Studio / MSVC

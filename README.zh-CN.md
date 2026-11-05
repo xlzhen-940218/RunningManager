@@ -54,6 +54,27 @@ sudo cmake --install build --prefix /usr/local
 RunningManager
 ```
 
+## Debian 安装包（arm64）
+
+从当前源码构建的 arm64 安装包会放到 `dist/`：
+
+```bash
+sudo apt install ./dist/runningmanager_1.1.0-1_arm64.deb
+```
+
+安装包会安装 `/usr/bin/runningmanager`（以及 `RunningManager` 兼容软链接）、
+桌面启动项、hicolor 图标和 `runningmanager(1)` 手册页。
+
+从源码重新打包：
+
+```bash
+sudo apt install debhelper
+dpkg-buildpackage -b -us -uc
+```
+
+生成的 `runningmanager_1.1.0-1_arm64.deb` 位于上级目录。Debian 打包使用
+`debian/third_party/imgui` 中自带的 Dear ImGui 源码，因此可以离线构建。
+
 ## Windows 构建
 
 ### Visual Studio / MSVC

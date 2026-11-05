@@ -1,0 +1,36 @@
+.TH RUNNINGMANAGER 1 "2026-11-05" "RunningManager 1.1.0" "User Commands"
+.SH NAME
+runningmanager \- lightweight process manager and system monitor
+.SH SYNOPSIS
+.B runningmanager
+.SH DESCRIPTION
+.B RunningManager
+is a desktop process manager and system monitor built with Dear ImGui.
+It lists running processes together with their PID, status, user, elevated
+privileges, CPU usage and memory usage.
+.PP
+The process table can be sorted by clicking a column header, filtered with
+the search box, and manipulated through the context menu: bring the
+application window to the front, open the executable location, or send
+SIGKILL to the selected process.
+.PP
+The left panel shows a system summary with CPU, memory, disk and, when the
+driver exposes the required counters, GPU usage.
+.SH OPTIONS
+The program does not take any command line options.
+.SH FILES
+.TP
+.I ~/.config/runningmanager/imgui.ini
+Persisted window, table and column layout.  The location follows
+.IR XDG_CONFIG_HOME .
+.SH NOTES
+Bringing a window to the front and detecting GUI processes requires an X11
+session with an EWMH-compliant window manager.  On Wayland sessions the
+window activation falls back to
+.BR xdotool (1)
+when it is available.  Opening the executable location requires
+.BR xdg-open (1).
+.SH SEE ALSO
+.BR ps (1),
+.BR top (1),
+.BR kill (1)

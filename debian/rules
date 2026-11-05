@@ -1,0 +1,14 @@
+#!/usr/bin/make -f
+
+%:
+	dh $@ --builddirectory=build-deb
+
+override_dh_auto_configure:
+	dh_auto_configure -- \
+		-DCMAKE_BUILD_TYPE=Release \
+		-DCMAKE_INSTALL_PREFIX=/usr \
+		-DFETCHCONTENT_SOURCE_DIR_IMGUI=$(CURDIR)/debian/third_party/imgui
+
+override_dh_auto_install:
+	dh_auto_install --destdir=debian/tmp
+	mv debian/tmp/usr/bin/RunningManager debian/tmp/usr/bin/runningmanager

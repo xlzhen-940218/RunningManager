@@ -1,0 +1,35 @@
+Source: runningmanager
+Section: utils
+Priority: optional
+Maintainer: droid <droid@example.com>
+Build-Depends: debhelper-compat (= 13),
+               cmake (>= 3.16),
+               pkg-config,
+               libsdl2-dev,
+               libgl1-mesa-dev,
+               libx11-dev,
+               git,
+               ca-certificates
+Standards-Version: 4.7.0
+Rules-Requires-Root: no
+Homepage: https://github.com/xlzhen-940218/RunningManager
+Vcs-Git: https://github.com/xlzhen-940218/RunningManager.git
+Vcs-Browser: https://github.com/xlzhen-940218/RunningManager
+
+Package: runningmanager
+Architecture: any
+Depends: ${shlibs:Depends},
+         ${misc:Depends},
+         xdg-utils
+Recommends: fonts-noto-cjk | fonts-wqy-microhei
+Suggests: xdotool
+Description: lightweight process manager and system monitor
+ RunningManager is a desktop process manager and system monitor built with
+ Dear ImGui. It lists running processes with PID, status, user, elevated
+ privileges, CPU and memory usage, and supports sorting, searching, killing
+ processes, bringing application windows to the front, and opening the
+ executable location.
+ .
+ The system summary shows CPU, memory, disk and, when supported by the
+ driver, GPU usage. The UI is available in light blue and light pink themes
+ and automatically uses a CJK font when one is installed.

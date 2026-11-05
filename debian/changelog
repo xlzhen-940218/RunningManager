@@ -1,0 +1,9 @@
+runningmanager (1.1.0-1) unstable; urgency=medium
+
+  * Initial Debian package.
+  * Linux frontend based on SDL2 and OpenGL 3.
+  * Process list, search, sorting and actions powered by /proc and X11 EWMH.
+  * System summary for CPU, memory, disk and supported GPUs.
+  * Desktop entry, application icons and manual page.
+
+ -- droid <droid@example.com>  Thu, 05 Nov 2026 19:15:00 +0800

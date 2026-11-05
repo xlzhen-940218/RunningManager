@@ -35,3 +35,4 @@
 
 # ImGui runtime settings
 imgui.ini
+/dist
