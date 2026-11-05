@@ -54,14 +54,43 @@ RunningManager
 
 ## Windows 构建
 
-使用 Visual Studio 或 MinGW：
+### Visual Studio / MSVC
+
+需要 Visual Studio 2019/2022，并安装“使用 C++ 的桌面开发”工作负载。在 PowerShell
+（普通 PowerShell 或 Developer PowerShell 均可）中：
 
 ```powershell
 cmake -S . -B build -A x64
 cmake --build build --config Release
 ```
 
+`-A x64` 适用于 Visual Studio 生成器；如果 CMake 默认生成器不是 Visual Studio，
+可以显式指定，例如 `-G "Visual Studio 17 2022" -A x64`。不指定 `-G` 时 CMake 会
+自动选择已安装的最新 Visual Studio 生成器。
 生成的 `RunningManager.exe` 位于 `build/Release/`。
+
+### MSYS2 / MinGW-w64
+
+在“MSYS2 MINGW64”终端中：
+
+```bash
+pacman -S --needed mingw-w64-x86_64-gcc make cmake
+cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
+cmake --build build -j"$(nproc)"
+./build/RunningManager.exe
+```
+
+说明：
+
+- 也可以直接在 MSYS2 的 “MSYS” 终端中运行上面的命令，只要 `PATH` 中能找到
+  MinGW-w64 的 `g++`。项目会自动识别“MSYS 版 CMake + MinGW-w64 编译器”的组合，
+  并把目标平台切换为 Windows。
+- 该组合下请使用默认的 “Unix Makefiles” 生成器，**不要加 `-G Ninja`**
+  （Ninja 不会转换 MSYS 的 POSIX 路径，CMake 会给出明确报错）。
+- 如果 `build/` 是旧版本或旧工具链配置过的，直接重新运行上面的 `cmake` 命令即可；
+  仍报错时删除 `build/` 后重试。
+- `MinGW` 构建会静态链接 MinGW 运行时（libstdc++/libgcc/libwinpthread），
+  生成的 exe 只依赖系统 DLL，可以脱离 MSYS2 环境运行。
 
 ## 平台差异
 
@@ -89,6 +118,13 @@ Linux 说明：
 - 程序会优先把窗口放到第二块显示器中央，并保持置顶；只有一块显示器时在主屏居中。
 
 ## 常见问题
+
+**在 MSYS2 中配置时报 `RunningManager currently supports Windows and Linux only`**
+
+说明当前终端里的 `cmake` 没有配上 Windows 目标编译器。推荐打开“MSYS2 MINGW64”
+终端重新执行构建命令；也可以留在 MSYS 终端，只需确认 `which g++` 指向
+`/mingw64/bin/g++`（必要时执行 `export PATH=/mingw64/bin:$PATH`）。本项目会自动
+识别这种组合；如果仍然失败，删除 `build/` 后重试。
 
 **配置时报 `Could NOT find SDL2`**
 
