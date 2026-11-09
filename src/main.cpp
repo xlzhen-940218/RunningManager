@@ -211,6 +211,8 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
     }
 
     // Cleanup
+    uiManager.SaveSettings();
+
     if (appIconTexture) {
         reinterpret_cast<ID3D11ShaderResourceView*>(appIconTexture)->Release();
         appIconTexture = (ImTextureID)0;

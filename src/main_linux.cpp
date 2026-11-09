@@ -400,6 +400,8 @@ int main(int argc, char** argv) {
         }
     }
 
+    uiManager.SaveSettings();
+
     ImGui_ImplOpenGL3_Shutdown();
     ImGui_ImplSDL2_Shutdown();
     ImGui::DestroyContext();

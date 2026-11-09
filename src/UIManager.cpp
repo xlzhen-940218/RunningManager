@@ -8,7 +8,9 @@
 #include <cfloat>
 #include <cmath>
 #include <cstdio>
+#include <cstdlib>
 #include <cstring>
+#include <filesystem>
 #include <fstream>
 #include <iomanip>
 #include <sstream>
@@ -16,6 +18,10 @@
 namespace {
 
 constexpr float kPi = 3.14159265358979323846f;
+
+// Logical diameter of the ring gauges. The sidebar's minimum width is derived
+// from this so a gauge always fits comfortably.
+constexpr float kGaugeDiameter = 84.0f;
 
 struct FontFile {
     const char* path;
@@ -53,6 +59,29 @@ bool FileExists(const char* path) {
     if (!path || !*path) return false;
     std::ifstream file(path);
     return file.good();
+}
+
+// Settings live in the user's home directory:
+//   Windows: %USERPROFILE%\.runningmanager\.env
+//   Linux:   /home/<user>/.runningmanager/.env
+std::string SettingsFilePath() {
+#ifdef _WIN32
+    const char* home = std::getenv("USERPROFILE");
+    if (!home || !*home) return {};
+    return std::string(home) + "\\.runningmanager\\.env";
+#else
+    const char* home = std::getenv("HOME");
+    if (!home || !*home) return {};
+    return std::string(home) + "/.runningmanager/.env";
+#endif
+}
+
+std::string Trim(const std::string& text) {
+    size_t begin = 0;
+    while (begin < text.size() && std::isspace(static_cast<unsigned char>(text[begin]))) ++begin;
+    size_t end = text.size();
+    while (end > begin && std::isspace(static_cast<unsigned char>(text[end - 1]))) --end;
+    return text.substr(begin, end - begin);
 }
 
 // ---------------------------------------------------------------------------
@@ -176,11 +205,83 @@ UIManager::UIManager(ProcessManager* processManager, SystemMonitor* systemMonito
       m_currentTheme(Theme::LightBlue),
       m_themeChanged(true),
       m_isDark(false),
-      m_selectedPid(-1) {
+      m_selectedPid(-1),
+      m_sidebarWidth(250.0f * (uiScale > 0.0f ? uiScale : 1.0f)),
+      m_sortColumn(5),
+      m_sortDescending(true) {
     std::memset(m_searchBuffer, 0, sizeof(m_searchBuffer));
+    LoadSettings();
 }
 
 UIManager::~UIManager() {}
+
+void UIManager::LoadSettings() {
+    const std::string path = SettingsFilePath();
+    if (path.empty()) return;
+
+    std::ifstream file(path);
+    if (!file) return;
+
+    std::string line;
+    while (std::getline(file, line)) {
+        const std::string trimmed = Trim(line);
+        if (trimmed.empty() || trimmed[0] == '#') continue;
+
+        const size_t separator = trimmed.find('=');
+        if (separator == std::string::npos) continue;
+
+        const std::string key = Trim(trimmed.substr(0, separator));
+        const std::string value = Trim(trimmed.substr(separator + 1));
+
+        if (key == "RM_SIDEBAR_WIDTH") {
+            try {
+                const float logical = std::stof(value);
+                if (logical > 0.0f) m_sidebarWidth = logical * m_scale;
+            } catch (...) {
+            }
+        } else if (key == "RM_SORT_COLUMN") {
+            try {
+                const int column = std::stoi(value);
+                if (column >= 0 && column < 7) m_sortColumn = column;
+            } catch (...) {
+            }
+        } else if (key == "RM_SORT_DIRECTION") {
+            m_sortDescending = (value == "desc");
+        } else if (key == "RM_THEME") {
+            if (value == "dark")
+                m_currentTheme = Theme::Dark;
+            else if (value == "pink")
+                m_currentTheme = Theme::LightPink;
+            else if (value == "blue")
+                m_currentTheme = Theme::LightBlue;
+        }
+    }
+}
+
+void UIManager::SaveSettings() {
+    const std::string path = SettingsFilePath();
+    if (path.empty()) return;
+
+    std::error_code error;
+    std::filesystem::create_directories(
+        std::filesystem::path(path).parent_path(), error);
+
+    std::ofstream file(path, std::ios::trunc);
+    if (!file) return;
+
+    const char* theme = "blue";
+    if (m_currentTheme == Theme::Dark)
+        theme = "dark";
+    else if (m_currentTheme == Theme::LightPink)
+        theme = "pink";
+
+    file << "# RunningManager settings (generated automatically)\n";
+    file << "RM_THEME=" << theme << "\n";
+    file << "RM_SIDEBAR_WIDTH=" << std::fixed << std::setprecision(1)
+         << (m_sidebarWidth / m_scale) << "\n";
+    file << "RM_SORT_COLUMN=" << m_sortColumn << "\n";
+    file << "RM_SORT_DIRECTION=" << (m_sortDescending ? "desc" : "asc") << "\n";
+}
 
 UIFonts UIManager::LoadFonts(ImGuiIO& io, float uiScale) {
     UIFonts fonts;
@@ -523,16 +624,44 @@ void UIManager::DrawProcessIconFallback(const ProcessInfo& proc, float size) con
     ImGui::Dummy(ImVec2(size, size));
 }
 
+void UIManager::DrawWrappedCenteredText(float left, float width, const std::string& text,
+                                        const ImVec4& color) {
+    if (text.empty() || width <= 0.0f) return;
+
+    const char* cursor = text.c_str();
+    const char* end = cursor + text.size();
+    while (cursor < end) {
+        const char* lineEnd =
+            ImGui::GetFont()->CalcWordWrapPositionA(1.0f, cursor, end, width);
+        if (lineEnd <= cursor) lineEnd = cursor + 1;
+
+        // Trailing spaces should not affect the centring of the visible line.
+        while (lineEnd > cursor && lineEnd[-1] == ' ') --lineEnd;
+        if (lineEnd <= cursor) {
+            ++cursor;
+            continue;
+        }
+
+        const std::string line(cursor, lineEnd);
+        const float lineWidth = ImGui::CalcTextSize(line.c_str()).x;
+        ImGui::SetCursorPosX(left + std::max(0.0f, (width - lineWidth) * 0.5f));
+        ImGui::TextColored(color, "%s", line.c_str());
+
+        cursor = lineEnd;
+        while (cursor < end && *cursor == ' ') ++cursor;
+    }
+}
+
 void UIManager::DrawGauge(const char* label, double percentage, const ImVec4& color,
-                          const std::string& detail, bool available) {
+                          const std::string& detail, bool available, float cellWidth) {
     const float s = m_scale;
-    const float avail = ImGui::GetContentRegionAvail().x;
-    const float diameter = std::min(84.0f * s, avail);
+    const float diameter = std::min(kGaugeDiameter * s, cellWidth);
     const float thickness = 8.0f * s;
     const float radius = diameter * 0.5f - thickness * 0.5f;
 
-    const float offsetX = (avail - diameter) * 0.5f;
-    ImGui::SetCursorPosX(ImGui::GetCursorPosX() + std::max(offsetX, 0.0f));
+    const float left = ImGui::GetCursorPosX();
+    const float offsetX = (cellWidth - diameter) * 0.5f;
+    ImGui::SetCursorPosX(left + std::max(offsetX, 0.0f));
 
     const ImVec2 origin = ImGui::GetCursorScreenPos();
     const ImVec2 center(origin.x + diameter * 0.5f, origin.y + diameter * 0.5f);
@@ -569,11 +698,12 @@ void UIManager::DrawGauge(const char* label, double percentage, const ImVec4& co
 
     ImGui::Dummy(ImVec2(diameter, diameter));
 
-    DrawCenteredTextColored(Col(ImGuiCol_Text), Ellipsize(label, avail - 2.0f * s).c_str());
+    // Labels wrap to the cell width instead of being ellipsized, so long device
+    // names stay readable when the sidebar is narrow.
+    DrawWrappedCenteredText(left, cellWidth, std::string(label), Col(ImGuiCol_Text));
 
     ImGui::PushFont(m_fonts.caption ? m_fonts.caption : ImGui::GetFont());
-    const std::string plainDetail = Ellipsize(detail, avail - 2.0f * s);
-    DrawCenteredTextColored(Col(ImGuiCol_TextDisabled), plainDetail.c_str());
+    DrawWrappedCenteredText(left, cellWidth, detail, Col(ImGuiCol_TextDisabled));
     ImGui::PopFont();
 
     ImGui::SetCursorPosY(ImGui::GetCursorPosY() + 4.0f * s);
@@ -639,15 +769,48 @@ void UIManager::Render() {
     ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0.0f);
 
     if (ImGui::Begin("##RunningManager", nullptr, windowFlags)) {
-        const float sidebarWidth = 244.0f * s;
+        RenderBanner();
+        ImGui::Dummy(ImVec2(0, 10.0f * s));
+
+        const float totalWidth = ImGui::GetContentRegionAvail().x;
+        const float minWidth = MinSidebarWidth();
+        const float maxWidth = std::max(minWidth, MaxSidebarWidth(totalWidth));
+        m_sidebarWidth = std::clamp(m_sidebarWidth, minWidth, maxWidth);
 
         ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(12.0f * s, 12.0f * s));
-        ImGui::BeginChild("##Sidebar", ImVec2(sidebarWidth, 0), true);
+        ImGui::BeginChild("##Sidebar", ImVec2(m_sidebarWidth, 0), true);
         RenderSidebar();
         ImGui::EndChild();
         ImGui::PopStyleVar();
 
-        ImGui::SameLine(0.0f, 12.0f * s);
+        // Draggable splitter between the sidebar and the process table.
+        const float splitterWidth = 10.0f * s;
+        const float bodyHeight = ImGui::GetContentRegionAvail().y;
+
+        ImGui::SameLine(0.0f, 0.0f);
+        const ImVec2 splitterMin = ImGui::GetCursorScreenPos();
+        ImGui::InvisibleButton("##SidebarSplitter", ImVec2(splitterWidth, bodyHeight));
+        const bool splitterHovered = ImGui::IsItemHovered();
+        const bool splitterActive = ImGui::IsItemActive();
+        if (splitterHovered || splitterActive) ImGui::SetMouseCursor(ImGuiMouseCursor_ResizeEW);
+        if (splitterActive) {
+            m_sidebarWidth = std::clamp(m_sidebarWidth + ImGui::GetIO().MouseDelta.x,
+                                        minWidth, maxWidth);
+        }
+        // Persist the new width once the drag ends rather than on every frame.
+        if (ImGui::IsItemDeactivated()) SaveSettings();
+
+        const float gripX = splitterMin.x + splitterWidth * 0.5f;
+        const ImU32 gripColor =
+            ToU32(splitterActive ? Col(ImGuiCol_Button)
+                                 : WithAlpha(Col(ImGuiCol_TextDisabled),
+                                             splitterHovered ? 0.55f : 0.22f));
+        ImGui::GetWindowDrawList()->AddLine(
+            ImVec2(gripX, splitterMin.y + 6.0f * s),
+            ImVec2(gripX, splitterMin.y + bodyHeight - 6.0f * s), gripColor,
+            (splitterHovered || splitterActive) ? 2.0f * s : 1.0f * s);
+
+        ImGui::SameLine(0.0f, 0.0f);
 
         ImGui::PushStyleColor(ImGuiCol_ChildBg, ImVec4(0, 0, 0, 0));
         ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0, 0));
@@ -663,12 +826,123 @@ void UIManager::Render() {
     if (m_fonts.body) ImGui::PopFont();
 }
 
+float UIManager::MinSidebarWidth() const {
+    const float s = m_scale;
+    // The content area must stay at least 1.5 ring widths wide; the rest is the
+    // child window padding and the scrollbar gutter.
+    return kGaugeDiameter * 1.5f * s + 2.0f * 12.0f * s + 10.0f * s;
+}
+
+float UIManager::MaxSidebarWidth(float availableWidth) const {
+    const float s = m_scale;
+    // Leave enough room for the process table's fixed columns plus a usable
+    // name column, so widening the sidebar never truncates the table.
+    const float contentMin = 650.0f * s;
+    return std::min(520.0f * s, availableWidth - contentMin);
+}
+
+void UIManager::RenderBanner() {
+    const float s = m_scale;
+    const float iconSize = 40.0f * s;
+    const float padY = 9.0f * s;
+
+    const float titleLine = m_fonts.title
+                                ? m_fonts.title->CalcTextSizeA(m_fonts.title->FontSize, FLT_MAX, 0.0f,
+                                                               "Ag").y
+                                : ImGui::GetTextLineHeight();
+    const float captionLine = m_fonts.caption
+                                  ? m_fonts.caption->CalcTextSizeA(m_fonts.caption->FontSize,
+                                                                   FLT_MAX, 0.0f, "Ag").y
+                                  : ImGui::GetTextLineHeight();
+    const float blockHeight = titleLine + ImGui::GetStyle().ItemSpacing.y + captionLine;
+    const float bannerHeight = std::max(iconSize, blockHeight) + padY * 2.0f;
+
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(14.0f * s, padY));
+    ImGui::BeginChild("##Banner", ImVec2(0, bannerHeight), true);
+    const float startY = ImGui::GetCursorPosY();
+
+    if (m_appIcon) {
+        ImGui::Image(m_appIcon, ImVec2(iconSize, iconSize));
+    } else {
+        DrawAppIconFallback(iconSize);
+    }
+
+    ImGui::SameLine(0.0f, 12.0f * s);
+    ImGui::SetCursorPosY(startY + std::max(0.0f, (iconSize - blockHeight) * 0.5f));
+
+    // The group isolates the two text lines from the icon's line height, so the
+    // subtitle is laid out directly under the title instead of under the icon.
+    ImGui::BeginGroup();
+    if (m_fonts.title) ImGui::PushFont(m_fonts.title);
+    ImGui::TextUnformatted("RunningManager");
+    if (m_fonts.title) ImGui::PopFont();
+
+    ImGui::PushFont(m_fonts.caption ? m_fonts.caption : ImGui::GetFont());
+    ImGui::TextDisabled("Process & System Monitor");
+    ImGui::PopFont();
+    ImGui::EndGroup();
+
+    // Theme swatches, right aligned on the banner and vertically centred on the
+    // icon. DrawThemeSwatches positions them itself, deterministically.
+    const float swatch = 15.0f * s;
+    const float swatchBox = swatch + 8.0f * s;
+    ImGui::SameLine();
+    ImGui::SetCursorPosY(startY + std::max(0.0f, (iconSize - swatchBox) * 0.5f));
+    DrawThemeSwatches();
+
+    ImGui::EndChild();
+    ImGui::PopStyleVar();
+}
+
+void UIManager::DrawThemeSwatches() {
+    const float s = m_scale;
+    const float swatch = 15.0f * s;
+    const float swatchBox = swatch + 8.0f * s;
+    const float swatchGap = 6.0f * s;
+    const float groupWidth = 3.0f * swatchBox + 2.0f * swatchGap;
+    const float startX = ImGui::GetWindowContentRegionMax().x - groupWidth;
+    const float startY = ImGui::GetCursorPosY();
+
+    ImDrawList* draw = ImGui::GetWindowDrawList();
+    const Theme themes[3] = {Theme::LightBlue, Theme::LightPink, Theme::Dark};
+    const char* themeNames[3] = {"Light Blue", "Light Pink", "Dark"};
+    // The dark swatch must read as black; the dark theme's accent colour is blue.
+    const ImVec4 swatchColors[3] = {Rgba(59, 130, 246), Rgba(226, 96, 127), Rgba(0, 0, 0)};
+
+    for (int i = 0; i < 3; ++i) {
+        ImGui::PushID(100 + i);
+        ImGui::SetCursorPos(
+            ImVec2(startX + i * (swatchBox + swatchGap), startY));
+        ImGui::InvisibleButton("##swatch", ImVec2(swatchBox, swatchBox));
+        const bool hovered = ImGui::IsItemHovered();
+        if (hovered) ImGui::SetTooltip("%s", themeNames[i]);
+        if (ImGui::IsItemClicked()) {
+            SetTheme(themes[i]);
+            SaveSettings();
+        }
+
+        ImVec2 center = ImGui::GetItemRectMin();
+        center.x += swatchBox * 0.5f;
+        center.y += swatchBox * 0.5f;
+        draw->AddCircleFilled(center, swatch * 0.5f, ToU32(swatchColors[i]), 24);
+        // A hairline keeps the black swatch visible on dark backgrounds.
+        draw->AddCircle(center, swatch * 0.5f, ToU32(WithAlpha(Col(ImGuiCol_TextDisabled), 0.45f)),
+                        24, 1.0f * s);
+        if (m_currentTheme == themes[i]) {
+            draw->AddCircle(center, swatch * 0.5f + 2.5f * s, ToU32(Col(ImGuiCol_Text)), 24,
+                            1.5f * s);
+        } else if (hovered) {
+            draw->AddCircle(center, swatch * 0.5f + 2.5f * s, ToU32(Col(ImGuiCol_TextDisabled)),
+                            24, 1.5f * s);
+        }
+        ImGui::PopID();
+    }
+}
+
 void UIManager::RenderSidebar() {
     const float s = m_scale;
     ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(10.0f * s, 6.0f * s));
-    RenderSidebarHeader();
 
-    ImGui::Dummy(ImVec2(0, 10.0f * s));
     ImGui::PushFont(m_fonts.caption ? m_fonts.caption : ImGui::GetFont());
     ImGui::PushStyleColor(ImGuiCol_Text, Col(ImGuiCol_TextDisabled));
     ImGui::TextUnformatted("SYSTEM SUMMARY");
@@ -685,19 +959,6 @@ void UIManager::RenderSidebar() {
     memDetail += " / ";
     memDetail += FormatBytes(m_systemMonitor->GetTotalMemoryBytes());
 
-    DrawGauge("CPU", m_systemMonitor->GetTotalCpuUsage(), cpuColor,
-              m_systemMonitor->GetCpuName(), true);
-
-    DrawGauge("Memory", m_systemMonitor->GetTotalMemoryUsage(), memColor, memDetail, true);
-
-    for (const auto& disk : m_systemMonitor->GetDisks()) {
-        const std::string diskLabel = "Disk " + disk.name;
-        const std::string diskDetail =
-            FormatBytes(disk.totalBytes - disk.freeBytes) + " of " +
-            FormatBytes(disk.totalBytes);
-        DrawGauge(diskLabel.c_str(), disk.usagePercentage, diskColor, diskDetail, true);
-    }
-
     std::string gpuDetail = m_systemMonitor->GetGpuName();
     if (m_systemMonitor->GetGpuDedicatedMemory() > 0) {
         gpuDetail += "  ";
@@ -705,8 +966,54 @@ void UIManager::RenderSidebar() {
         gpuDetail += " VRAM";
     }
     const bool gpuAvailable = m_systemMonitor->IsGpuUsageAvailable();
-    DrawGauge("GPU", gpuAvailable ? m_systemMonitor->GetTotalGpuUsage() : 0.0, gpuColor, gpuDetail,
-              gpuAvailable);
+
+    struct GaugeEntry {
+        std::string label;
+        double value;
+        ImVec4 color;
+        std::string detail;
+        bool available;
+    };
+
+    std::vector<GaugeEntry> entries;
+    entries.push_back({"CPU", m_systemMonitor->GetTotalCpuUsage(), cpuColor,
+                       m_systemMonitor->GetCpuName(), true});
+    entries.push_back({"Memory", m_systemMonitor->GetTotalMemoryUsage(), memColor, memDetail, true});
+    for (const auto& disk : m_systemMonitor->GetDisks()) {
+        entries.push_back({"Disk " + disk.name, disk.usagePercentage, diskColor,
+                           FormatBytes(disk.totalBytes - disk.freeBytes) + " of " +
+                               FormatBytes(disk.totalBytes),
+                           true});
+    }
+    entries.push_back({"GPU", gpuAvailable ? m_systemMonitor->GetTotalGpuUsage() : 0.0, gpuColor,
+                       gpuDetail, gpuAvailable});
+
+    // Lay the gauges out in one column, or two when the sidebar is wide enough.
+    const float avail = ImGui::GetContentRegionAvail().x;
+    const float gap = 12.0f * s;
+    const float minCell = (kGaugeDiameter + 24.0f) * s;
+    const int columns = (avail >= 2.0f * minCell + gap) ? 2 : 1;
+    const float cellWidth = (columns == 2) ? (avail - gap) * 0.5f : avail;
+
+    const float left = ImGui::GetCursorPosX();
+    size_t index = 0;
+    while (index < entries.size()) {
+        const int colCount =
+            std::min(columns, static_cast<int>(entries.size() - index));
+        const float rowTop = ImGui::GetCursorPosY();
+        float rowBottom = rowTop;
+        for (int col = 0; col < colCount; ++col) {
+            const GaugeEntry& entry = entries[index + static_cast<size_t>(col)];
+            ImGui::SetCursorPos(ImVec2(left + col * (cellWidth + gap), rowTop));
+            ImGui::BeginGroup();
+            DrawGauge(entry.label.c_str(), entry.value, entry.color, entry.detail, entry.available,
+                      cellWidth);
+            ImGui::EndGroup();
+            rowBottom = std::max(rowBottom, ImGui::GetCursorPosY());
+        }
+        index += static_cast<size_t>(colCount);
+        ImGui::SetCursorPos(ImVec2(left, rowBottom));
+    }
 
     ImGui::Dummy(ImVec2(0, 4.0f * s));
     ImGui::Separator();
@@ -715,33 +1022,6 @@ void UIManager::RenderSidebar() {
     DrawCenteredTextColored(Col(ImGuiCol_TextDisabled), "RunningManager 1.1.0");
     ImGui::PopFont();
     ImGui::PopStyleVar();
-}
-
-void UIManager::RenderSidebarHeader() {
-    const float s = m_scale;
-    const float iconSize = 40.0f * s;
-    const float titleHeight = m_fonts.title ? m_fonts.title->FontSize : ImGui::GetFontSize();
-
-    if (m_appIcon) {
-        ImGui::Image(m_appIcon, ImVec2(iconSize, iconSize));
-    } else {
-        DrawAppIconFallback(iconSize);
-    }
-
-    ImGui::SameLine(0.0f, 10.0f * s);
-    ImGui::BeginGroup();
-    {
-        const float cursorY = ImGui::GetCursorPosY();
-        ImGui::SetCursorPosY(cursorY + std::max(0.0f, (iconSize - titleHeight - 16.0f * s) * 0.5f));
-        if (m_fonts.title) ImGui::PushFont(m_fonts.title);
-        ImGui::TextUnformatted("RunningManager");
-        if (m_fonts.title) ImGui::PopFont();
-
-        ImGui::PushFont(m_fonts.caption ? m_fonts.caption : ImGui::GetFont());
-        ImGui::TextDisabled("Process & System Monitor");
-        ImGui::PopFont();
-    }
-    ImGui::EndGroup();
 }
 
 void UIManager::RenderContent() {
@@ -784,41 +1064,8 @@ void UIManager::RenderTopBar() {
     ImGui::SetCursorPosY(ImGui::GetCursorPosY() + std::max(0.0f, (titleHeight - chipHeight) * 0.5f));
     DrawCountChip(processCount);
 
-    // Theme swatches, right aligned on the title row.
-    const float swatch = 15.0f * s;
-    const float swatchBox = swatch + 8.0f * s;
-    const float swatchGap = 6.0f * s;
-    const float groupWidth = 3.0f * swatchBox + 2.0f * swatchGap;
-    ImGui::SameLine();
-    ImGui::SetCursorPosX(ImGui::GetWindowContentRegionMax().x - groupWidth);
-    ImGui::SetCursorPosY(ImGui::GetCursorPosY() + std::max(0.0f, (titleHeight - swatchBox) * 0.5f));
-
-    ImDrawList* draw = ImGui::GetWindowDrawList();
-    const Theme themes[3] = {Theme::LightBlue, Theme::LightPink, Theme::Dark};
-    const char* themeNames[3] = {"Light Blue", "Light Pink", "Dark"};
-    for (int i = 0; i < 3; ++i) {
-        ImGui::PushID(i);
-        ImGui::InvisibleButton("##swatch", ImVec2(swatchBox, swatchBox));
-        const bool hovered = ImGui::IsItemHovered();
-        if (hovered) ImGui::SetTooltip("%s", themeNames[i]);
-        if (ImGui::IsItemClicked()) SetTheme(themes[i]);
-
-        ImVec2 center = ImGui::GetItemRectMin();
-        center.x += swatchBox * 0.5f;
-        center.y += swatchBox * 0.5f;
-        draw->AddCircleFilled(center, swatch * 0.5f, ToU32(PaletteFor(themes[i]).accent), 24);
-        if (m_currentTheme == themes[i]) {
-            draw->AddCircle(center, swatch * 0.5f + 2.5f * s, ToU32(Col(ImGuiCol_Text)), 24,
-                            1.5f * s);
-        } else if (hovered) {
-            draw->AddCircle(center, swatch * 0.5f + 2.5f * s, ToU32(Col(ImGuiCol_TextDisabled)),
-                            24, 1.5f * s);
-        }
-        ImGui::PopID();
-        if (i < 2) ImGui::SameLine(0.0f, swatchGap);
-    }
-
     // Search field -----------------------------------------------------------
+    ImDrawList* draw = ImGui::GetWindowDrawList();
     const ImVec2 framePadding(30.0f * s, 7.0f * s);
     ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 10.0f * s);
     ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, framePadding);
@@ -910,27 +1157,60 @@ void UIManager::RenderProcessTable() {
     }
 
     const float footerHeight = ImGui::GetTextLineHeightWithSpacing() + 4.0f * s;
+    const float tableAvail = ImGui::GetContentRegionAvail().x;
     const float tableHeight =
         std::max(80.0f * s, ImGui::GetContentRegionAvail().y - footerHeight);
 
     const ImGuiTableFlags tableFlags =
         ImGuiTableFlags_Resizable | ImGuiTableFlags_Reorderable | ImGuiTableFlags_Hideable |
         ImGuiTableFlags_Sortable | ImGuiTableFlags_SortMulti | ImGuiTableFlags_RowBg |
-        ImGuiTableFlags_ScrollY;
+        // The .env settings are authoritative for the sort order, so do not let
+        // imgui.ini restore an older sort spec on start-up.
+        ImGuiTableFlags_NoSavedSettings | ImGuiTableFlags_ScrollY;
 
     if (ImGui::BeginTable("##ProcessTable", 7, tableFlags, ImVec2(0.0f, tableHeight))) {
         ImGui::TableSetupScrollFreeze(0, 1);
-        ImGui::TableSetupColumn("NAME", ImGuiTableColumnFlags_WidthStretch, 220.0f * s);
-        ImGui::TableSetupColumn("PID", ImGuiTableColumnFlags_WidthFixed, 56.0f * s);
-        ImGui::TableSetupColumn("STATUS", ImGuiTableColumnFlags_WidthFixed, 124.0f * s);
-        ImGui::TableSetupColumn("USER", ImGuiTableColumnFlags_WidthFixed, 76.0f * s);
-        ImGui::TableSetupColumn("ADMIN", ImGuiTableColumnFlags_WidthFixed, 56.0f * s);
-        ImGui::TableSetupColumn("CPU",
+        // The name column takes whatever the fixed columns leave over. Dragging
+        // the sidebar wider steals room from the table, so the secondary columns
+        // (USER/ADMIN, near-constant values) are hidden instead of squeezing the
+        // process names away.
+        const float cellPad = ImGui::GetStyle().CellPadding.x * 2.0f;
+        const float nameMin = 90.0f * s;
+        const float fixedWidthsAll = (56.0f + 124.0f + 76.0f + 56.0f + 64.0f + 80.0f) * s;
+        const bool showSecondary =
+            tableAvail >= fixedWidthsAll + cellPad * 7.0f + nameMin;
+        ImGui::TableSetColumnEnabled(3, showSecondary);
+        ImGui::TableSetColumnEnabled(4, showSecondary);
+
+        // The persisted sort order is re-applied through the default-sort flags,
+        // which Dear ImGui uses to build the initial sort specs.
+        auto sortFlags = [this](int column) {
+            ImGuiTableColumnFlags flags = 0;
+            if (column == m_sortColumn) {
+                flags |= ImGuiTableColumnFlags_DefaultSort;
+                if (m_sortDescending) flags |= ImGuiTableColumnFlags_PreferSortDescending;
+            }
+            return flags;
+        };
+
+        ImGui::TableSetupColumn("NAME", ImGuiTableColumnFlags_WidthStretch | sortFlags(0),
+                                1.0f);
+        ImGui::TableSetupColumn("PID", ImGuiTableColumnFlags_WidthFixed | sortFlags(1),
+                                56.0f * s);
+        ImGui::TableSetupColumn("STATUS", ImGuiTableColumnFlags_WidthFixed | sortFlags(2),
+                                124.0f * s);
+        ImGui::TableSetupColumn("USER",
                                 ImGuiTableColumnFlags_WidthFixed |
-                                    ImGuiTableColumnFlags_DefaultSort |
-                                    ImGuiTableColumnFlags_PreferSortDescending,
+                                    ImGuiTableColumnFlags_DefaultHide | sortFlags(3),
+                                76.0f * s);
+        ImGui::TableSetupColumn("ADMIN",
+                                ImGuiTableColumnFlags_WidthFixed |
+                                    ImGuiTableColumnFlags_DefaultHide | sortFlags(4),
+                                56.0f * s);
+        ImGui::TableSetupColumn("CPU", ImGuiTableColumnFlags_WidthFixed | sortFlags(5),
                                 64.0f * s);
-        ImGui::TableSetupColumn("MEMORY", ImGuiTableColumnFlags_WidthFixed, 80.0f * s);
+        ImGui::TableSetupColumn("MEMORY", ImGuiTableColumnFlags_WidthFixed | sortFlags(6),
+                                80.0f * s);
 
         ImGui::PushFont(m_fonts.caption ? m_fonts.caption : ImGui::GetFont());
         ImGui::PushStyleColor(ImGuiCol_Text, WithAlpha(Col(ImGuiCol_Text), 0.62f));
@@ -941,6 +1221,18 @@ void UIManager::RenderProcessTable() {
         // Sorting -------------------------------------------------------------
         ImGuiTableSortSpecs* sortSpecs = ImGui::TableGetSortSpecs();
         if (sortSpecs && sortSpecs->SpecsCount > 0) {
+            // Remember header clicks so the next start-up sorts the same way.
+            const ImGuiTableColumnSortSpecs& primary = sortSpecs->Specs[0];
+            const bool primaryDescending =
+                primary.SortDirection == ImGuiSortDirection_Descending;
+            if (primary.ColumnIndex != m_sortColumn ||
+                primaryDescending != m_sortDescending) {
+                m_sortColumn = primary.ColumnIndex;
+                m_sortDescending = primaryDescending;
+                SaveSettings();
+            }
+            if (sortSpecs->SpecsDirty) sortSpecs->SpecsDirty = false;
+
             auto compareColumn = [this](int column, const ProcessInfo& a, const ProcessInfo& b) {
                 switch (column) {
                     case 0:
