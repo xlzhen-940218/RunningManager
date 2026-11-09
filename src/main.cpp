@@ -43,18 +43,62 @@ static BOOL CALLBACK MonitorEnumProc(HMONITOR hMonitor, HDC hdcMonitor, LPRECT l
     return TRUE;
 }
 
+// Opt into per-monitor DPI awareness before any window is created. ImGui's
+// ImGui_ImplWin32_EnableDpiAwareness() only sets a thread-local policy on
+// Windows 10 and returns early, which leaves the process DPI-unaware and makes
+// GetDpiForMonitor() report 96 DPI for every monitor.
+static void EnableProcessDpiAwareness() {
+    using PFN_SetProcessDpiAwarenessContext = BOOL(WINAPI*)(void*);
+    using PFN_SetProcessDpiAwareness = HRESULT(WINAPI*)(int);
+
+    if (HMODULE user32 = ::GetModuleHandleW(L"user32.dll")) {
+        if (auto fn = reinterpret_cast<PFN_SetProcessDpiAwarenessContext>(
+                ::GetProcAddress(user32, "SetProcessDpiAwarenessContext"))) {
+            // DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2 == (HANDLE)-4
+            if (fn(reinterpret_cast<void*>(static_cast<INT_PTR>(-4))))
+                return;
+        }
+    }
+    if (HMODULE shcore = ::LoadLibraryW(L"shcore.dll")) {
+        if (auto fn = reinterpret_cast<PFN_SetProcessDpiAwareness>(
+                ::GetProcAddress(shcore, "SetProcessDpiAwareness"))) {
+            // PROCESS_PER_MONITOR_DPI_AWARE == 2
+            if (SUCCEEDED(fn(2)))
+                return;
+        }
+    }
+    ::SetProcessDPIAware();
+}
+
 // Main code
 int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine, int nShowCmd)
 {
+    // Render at the monitor's native pixel density. Without this the process is
+    // DPI-unaware, so at 125%/150% Windows bitmap-stretches the whole window
+    // (fonts included) and everything looks blurry.
+    EnableProcessDpiAwareness();
+
     HINSTANCE hInst = (hInstance != nullptr) ? hInstance : GetModuleHandle(nullptr);
     HICON hIcon = (HICON)LoadImageW(hInst, MAKEINTRESOURCEW(IDI_APP_ICON), IMAGE_ICON, 0, 0, LR_DEFAULTSIZE | LR_SHARED);
     HICON hIconSm = (HICON)LoadImageW(hInst, MAKEINTRESOURCEW(IDI_APP_ICON), IMAGE_ICON, GetSystemMetrics(SM_CXSMICON), GetSystemMetrics(SM_CYSMICON), LR_SHARED);
 
+    // Pick the monitor the window should live on: the first secondary one if
+    // present, otherwise the primary monitor.
+    MonitorEnumData monitorData = { nullptr, false };
+    EnumDisplayMonitors(nullptr, nullptr, MonitorEnumProc, (LPARAM)&monitorData);
+    const HMONITOR targetMonitor =
+        (monitorData.foundSecondary && monitorData.targetMonitor)
+            ? monitorData.targetMonitor
+            : MonitorFromPoint(POINT{0, 0}, MONITOR_DEFAULTTOPRIMARY);
+
+    // Scale the layout and the fonts by the monitor's DPI factor.
+    const float uiScale = ImGui_ImplWin32_GetDpiScaleForMonitor(targetMonitor);
+    const int windowWidth = static_cast<int>(1020.0f * uiScale + 0.5f);
+    const int windowHeight = static_cast<int>(720.0f * uiScale + 0.5f);
+
     // Create application window
     WNDCLASSEXW wc = { sizeof(wc), CS_CLASSDC, WndProc, 0L, 0L, hInst, hIcon, nullptr, nullptr, nullptr, L"RunningManagerClass", hIconSm };
     ::RegisterClassExW(&wc);
-    int windowWidth = 1020;
-    int windowHeight = 720;
     HWND hwnd = ::CreateWindowW(wc.lpszClassName, L"RunningManager - Process Explorer", WS_OVERLAPPEDWINDOW, 100, 100, windowWidth, windowHeight, nullptr, nullptr, wc.hInstance, nullptr);
 
     if (hIcon) {
@@ -72,10 +116,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
         return 1;
     }
 
-    // Check for secondary monitor and set TOPMOST
-    MonitorEnumData monitorData = { nullptr, false };
-    EnumDisplayMonitors(nullptr, nullptr, MonitorEnumProc, (LPARAM)&monitorData);
-    
+    // Centre the window on the chosen monitor and keep it on top.
     if (monitorData.foundSecondary && monitorData.targetMonitor) {
         MONITORINFO mi;
         mi.cbSize = sizeof(MONITORINFO);
@@ -102,8 +143,10 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 
     // Theme initialization will be handled by UIManager
 
-    // Load the UI fonts (body, title and small sizes).
-    const UIFonts fonts = UIManager::LoadFonts(io, 1.0f);
+    // Scale the style and load the UI fonts at the monitor's DPI factor so the
+    // text is rasterised at its final pixel size instead of being upscaled.
+    if (uiScale > 1.0f) ImGui::GetStyle().ScaleAllSizes(uiScale);
+    const UIFonts fonts = UIManager::LoadFonts(io, uiScale);
 
     // Setup Platform/Renderer backends
     ImGui_ImplWin32_Init(hwnd);
@@ -118,7 +161,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
     processManager.Init(g_pd3dDevice);
     SystemMonitor systemMonitor;
     systemMonitor.Init(g_pd3dDevice);
-    UIManager uiManager(&processManager, &systemMonitor, appIconTexture, fonts, 1.0f);
+    UIManager uiManager(&processManager, &systemMonitor, appIconTexture, fonts, uiScale);
 
     // Initial refresh
     processManager.RefreshProcesses();

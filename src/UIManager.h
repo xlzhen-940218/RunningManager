@@ -10,7 +10,9 @@
 struct UIFonts {
     ImFont* body = nullptr;
     ImFont* title = nullptr;
-    ImFont* small = nullptr;
+    // Named "caption" rather than "small": <rpcndr.h> defines "small" as a
+    // macro expanding to char on Windows, which breaks this declaration.
+    ImFont* caption = nullptr;
 };
 
 class UIManager {

@@ -208,8 +208,8 @@ UIFonts UIManager::LoadFonts(ImGuiIO& io, float uiScale) {
         if (!body) continue;
 
         fonts.body = body;
-        fonts.small = io.Fonts->AddFontFromFileTTF(candidate.path, smallSize, &config, ranges);
-        if (!fonts.small) fonts.small = body;
+        fonts.caption = io.Fonts->AddFontFromFileTTF(candidate.path, smallSize, &config, ranges);
+        if (!fonts.caption) fonts.caption = body;
 
         for (const FontFile& titleCandidate : kTitleFonts) {
             if (!FileExists(titleCandidate.path)) continue;
@@ -229,7 +229,7 @@ UIFonts UIManager::LoadFonts(ImGuiIO& io, float uiScale) {
     if (!fonts.body) {
         fonts.body = io.Fonts->AddFontDefault();
         fonts.title = fonts.body;
-        fonts.small = fonts.body;
+        fonts.caption = fonts.body;
     }
 
     return fonts;
@@ -571,7 +571,7 @@ void UIManager::DrawGauge(const char* label, double percentage, const ImVec4& co
 
     DrawCenteredTextColored(Col(ImGuiCol_Text), Ellipsize(label, avail - 2.0f * s).c_str());
 
-    ImGui::PushFont(m_fonts.small ? m_fonts.small : ImGui::GetFont());
+    ImGui::PushFont(m_fonts.caption ? m_fonts.caption : ImGui::GetFont());
     const std::string plainDetail = Ellipsize(detail, avail - 2.0f * s);
     DrawCenteredTextColored(Col(ImGuiCol_TextDisabled), plainDetail.c_str());
     ImGui::PopFont();
@@ -605,7 +605,7 @@ void UIManager::DrawCountChip(int count) {
     char text[32];
     std::snprintf(text, sizeof(text), "%d", count);
 
-    ImGui::PushFont(m_fonts.small ? m_fonts.small : ImGui::GetFont());
+    ImGui::PushFont(m_fonts.caption ? m_fonts.caption : ImGui::GetFont());
     const ImVec2 textSize = ImGui::CalcTextSize(text);
     const float height = textSize.y + 6.0f * s;
     const float width = textSize.x + 16.0f * s;
@@ -669,7 +669,7 @@ void UIManager::RenderSidebar() {
     RenderSidebarHeader();
 
     ImGui::Dummy(ImVec2(0, 10.0f * s));
-    ImGui::PushFont(m_fonts.small ? m_fonts.small : ImGui::GetFont());
+    ImGui::PushFont(m_fonts.caption ? m_fonts.caption : ImGui::GetFont());
     ImGui::PushStyleColor(ImGuiCol_Text, Col(ImGuiCol_TextDisabled));
     ImGui::TextUnformatted("SYSTEM SUMMARY");
     ImGui::PopStyleColor();
@@ -711,7 +711,7 @@ void UIManager::RenderSidebar() {
     ImGui::Dummy(ImVec2(0, 4.0f * s));
     ImGui::Separator();
     ImGui::Dummy(ImVec2(0, 4.0f * s));
-    ImGui::PushFont(m_fonts.small ? m_fonts.small : ImGui::GetFont());
+    ImGui::PushFont(m_fonts.caption ? m_fonts.caption : ImGui::GetFont());
     DrawCenteredTextColored(Col(ImGuiCol_TextDisabled), "RunningManager 1.1.0");
     ImGui::PopFont();
     ImGui::PopStyleVar();
@@ -737,7 +737,7 @@ void UIManager::RenderSidebarHeader() {
         ImGui::TextUnformatted("RunningManager");
         if (m_fonts.title) ImGui::PopFont();
 
-        ImGui::PushFont(m_fonts.small ? m_fonts.small : ImGui::GetFont());
+        ImGui::PushFont(m_fonts.caption ? m_fonts.caption : ImGui::GetFont());
         ImGui::TextDisabled("Process & System Monitor");
         ImGui::PopFont();
     }
@@ -779,7 +779,7 @@ void UIManager::RenderTopBar() {
     if (m_fonts.title) ImGui::PopFont();
 
     ImGui::SameLine(0.0f, 10.0f * s);
-    const float chipHeight = (m_fonts.small ? m_fonts.small->FontSize : ImGui::GetFontSize()) +
+    const float chipHeight = (m_fonts.caption ? m_fonts.caption->FontSize : ImGui::GetFontSize()) +
                              6.0f * s;
     ImGui::SetCursorPosY(ImGui::GetCursorPosY() + std::max(0.0f, (titleHeight - chipHeight) * 0.5f));
     DrawCountChip(processCount);
@@ -902,7 +902,7 @@ void UIManager::RenderProcessTable() {
         ImGui::PushFont(m_fonts.title ? m_fonts.title : ImGui::GetFont());
         DrawCenteredTextColored(Col(ImGuiCol_Text), "No matching processes");
         ImGui::PopFont();
-        ImGui::PushFont(m_fonts.small ? m_fonts.small : ImGui::GetFont());
+        ImGui::PushFont(m_fonts.caption ? m_fonts.caption : ImGui::GetFont());
         DrawCenteredTextColored(Col(ImGuiCol_TextDisabled),
                                 "Try a different name, PID, user or status.");
         ImGui::PopFont();
@@ -932,7 +932,7 @@ void UIManager::RenderProcessTable() {
                                 64.0f * s);
         ImGui::TableSetupColumn("MEMORY", ImGuiTableColumnFlags_WidthFixed, 80.0f * s);
 
-        ImGui::PushFont(m_fonts.small ? m_fonts.small : ImGui::GetFont());
+        ImGui::PushFont(m_fonts.caption ? m_fonts.caption : ImGui::GetFont());
         ImGui::PushStyleColor(ImGuiCol_Text, WithAlpha(Col(ImGuiCol_Text), 0.62f));
         ImGui::TableHeadersRow();
         ImGui::PopStyleColor();
@@ -1107,7 +1107,7 @@ void UIManager::RenderProcessTable() {
     }
 
     // Footer -----------------------------------------------------------------
-    ImGui::PushFont(m_fonts.small ? m_fonts.small : ImGui::GetFont());
+    ImGui::PushFont(m_fonts.caption ? m_fonts.caption : ImGui::GetFont());
     ImGui::PushStyleColor(ImGuiCol_Text, Col(ImGuiCol_TextDisabled));
     if (m_searchQuery.empty()) {
         ImGui::Text("%d processes", static_cast<int>(visible.size()));
