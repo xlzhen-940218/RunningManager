@@ -13,12 +13,22 @@
 - 按进程名、用户名、完整路径、PID、状态搜索
 - 右键菜单：窗口置前、打开文件位置、结束进程
 - 系统概览：CPU、内存、磁盘占用、GPU
-- 浅蓝 / 浅粉两套主题
+- 浅蓝、浅粉、深色三套主题，可在顶部横幅中切换
+- 左侧栏可拖动调整宽度（有最小/最大限制）；拉宽后环形进度自动变为两列，
+  环形下方的设备名称/描述自动换行
+- 主题、左侧栏宽度、进程排序方式会保存到 `~/.runningmanager/.env`
+  （Windows 为 `%USERPROFILE%\.runningmanager\.env`）
 - 自动查找 Noto CJK / 文泉驿等字体，可正确显示中文进程名
 - Windows：Win32 + Direct3D 11；Linux：SDL2 + OpenGL 3
 
 > 已在 Debian GNU/Linux 13 (trixie) aarch64 上完成构建、运行与交互验证；
 > Windows 代码已使用 MinGW-w64 x86_64 交叉编译验证。
+
+## 主题
+
+| 浅蓝 | 浅粉 | 深色 |
+| --- | --- | --- |
+| <img src="docs/theme-light-blue.png" width="330" alt="浅蓝主题"> | <img src="docs/theme-light-pink.png" width="330" alt="浅粉主题"> | <img src="docs/theme-dark.png" width="330" alt="深色主题"> |
 
 ## Linux 构建（Debian / Ubuntu）
 
@@ -115,6 +125,27 @@ cmake --build build -j"$(nproc)"
 - `MinGW` 构建会静态链接 MinGW 运行时（libstdc++/libgcc/libwinpthread），
   生成的 exe 只依赖系统 DLL，可以脱离 MSYS2 环境运行。
 
+## 设置文件
+
+主题、左侧栏宽度和进程排序方式保存在用户目录下（不在仓库内）：
+
+- Windows：`%USERPROFILE%\.runningmanager\.env`
+- Linux：`~/.runningmanager/.env`
+
+文件为纯文本 `KEY=VALUE` 格式，在切换主题、松开侧栏分隔条、改变排序列/顺序以及
+退出程序时会自动重写：
+
+```ini
+# RunningManager settings (generated automatically)
+RM_THEME=blue           # blue | pink | dark
+RM_SIDEBAR_WIDTH=250.0  # 逻辑像素，启动时会重新限制在允许范围内
+RM_SORT_COLUMN=5        # 表列索引（0 = NAME，5 = CPU，6 = MEMORY）
+RM_SORT_DIRECTION=desc  # asc | desc
+```
+
+删除该文件（或整个目录）即可恢复默认值（浅蓝主题、250px 侧栏、CPU 降序）。
+窗口尺寸等几何信息仍单独保存在 `imgui.ini` 中。
+
 ## 平台差异
 
 | 功能 | Windows | Linux |
@@ -184,6 +215,9 @@ src/
   UIManager.cpp/.h          共享 ImGui 界面
 docs/
   screenshot.png            运行截图
+  theme-light-blue.png      浅蓝主题
+  theme-light-pink.png      浅粉主题
+  theme-dark.png            深色主题
 ```
 
 ## 许可证

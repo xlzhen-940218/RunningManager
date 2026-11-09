@@ -13,12 +13,22 @@ A process manager / task manager built with Dear ImGui, supporting Windows and L
 - Search by process name, user, full path, PID, or state
 - Context menu: bring window to front, open file location, kill process
 - System overview: CPU, memory, disk usage, GPU
-- Light blue and light pink themes
+- Three themes: light blue, light pink and dark, switchable from the banner
+- Resizable sidebar with sensible minimum/maximum width; the gauge list switches to two
+  columns when the sidebar is widened, and device labels wrap automatically
+- Theme, sidebar width and process sort order are persisted to
+  `~/.runningmanager/.env` (`%USERPROFILE%\.runningmanager\.env` on Windows)
 - Automatically finds Noto CJK / WenQuanYi and similar fonts to display Chinese process names correctly
 - Windows: Win32 + Direct3D 11; Linux: SDL2 + OpenGL 3
 
 > Built, run, and interactively tested on Debian GNU/Linux 13 (trixie) aarch64;
 > the Windows code has been verified with a MinGW-w64 x86_64 cross-compile.
+
+## Themes
+
+| Light Blue | Light Pink | Dark |
+| --- | --- | --- |
+| <img src="docs/theme-light-blue.png" width="330" alt="Light Blue theme"> | <img src="docs/theme-light-pink.png" width="330" alt="Light Pink theme"> | <img src="docs/theme-dark.png" width="330" alt="Dark theme"> |
 
 ## Linux Build (Debian / Ubuntu)
 
@@ -122,6 +132,29 @@ Notes:
 - MinGW builds statically link the MinGW runtime (libstdc++/libgcc/libwinpthread), so
   the executable only depends on system DLLs and can run outside MSYS2.
 
+## Settings
+
+Themes, sidebar width and the process sort order are stored outside the repository,
+in the user's home directory:
+
+- Windows: `%USERPROFILE%\.runningmanager\.env`
+- Linux: `~/.runningmanager/.env`
+
+The file is plain `KEY=VALUE` text and is rewritten automatically when you pick a
+theme, release the sidebar splitter, change the sort column/order, or exit the program:
+
+```ini
+# RunningManager settings (generated automatically)
+RM_THEME=blue           # blue | pink | dark
+RM_SIDEBAR_WIDTH=250.0  # logical pixels, re-clamped to the allowed range at start-up
+RM_SORT_COLUMN=5        # table column index (0 = NAME, 5 = CPU, 6 = MEMORY)
+RM_SORT_DIRECTION=desc  # asc | desc
+```
+
+Deleting the file or the whole directory restores the defaults (light blue theme,
+250px sidebar, CPU sorted descending). Window geometry is kept separately in
+`imgui.ini`.
+
 ## Platform Differences
 
 | Feature | Windows | Linux |
@@ -195,6 +228,9 @@ src/
   UIManager.cpp/.h          Shared ImGui UI
 docs/
   screenshot.png            Screenshot
+  theme-light-blue.png      Light blue theme
+  theme-light-pink.png      Light pink theme
+  theme-dark.png            Dark theme
 ```
 
 ## License
