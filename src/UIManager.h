@@ -5,10 +5,18 @@
 
 #include <string>
 
+// Fonts loaded once at start-up and shared by the UI. Any entry may be null,
+// in which case the corresponding text falls back to the default font.
+struct UIFonts {
+    ImFont* body = nullptr;
+    ImFont* title = nullptr;
+    ImFont* small = nullptr;
+};
+
 class UIManager {
 public:
     UIManager(ProcessManager* processManager, SystemMonitor* systemMonitor,
-              ImTextureID appIcon = (ImTextureID)0);
+              ImTextureID appIcon, const UIFonts& fonts, float uiScale);
     ~UIManager();
 
     void Render();
@@ -16,29 +24,53 @@ public:
 
     enum class Theme {
         LightBlue,
-        LightPink
+        LightPink,
+        Dark
     };
     void SetTheme(Theme theme);
+
+    // Loads body/title/small font sizes (and CJK coverage) from fonts available
+    // on the host. Safe to call before the platform backend is initialised.
+    static UIFonts LoadFonts(ImGuiIO& io, float uiScale);
+
+    // Colour used behind the whole window (also used to clear the framebuffer).
+    ImVec4 GetBackgroundColor() const;
 
 private:
     ProcessManager* m_processManager;
     SystemMonitor*  m_systemMonitor;
     ImTextureID     m_appIcon;
+    UIFonts         m_fonts;
+    float           m_scale;
     std::string     m_searchQuery;
     char            m_searchBuffer[256] = {};
     Theme           m_currentTheme;
     bool            m_themeChanged;
+    bool            m_isDark;
+    int             m_selectedPid;
 
-    bool m_firstFrame;
+    void ApplyTheme();
 
+    void RenderSidebar();
+    void RenderSidebarHeader();
+    void RenderContent();
     void RenderTopBar();
-    void RenderSystemInfoPanel();
     void RenderProcessTable();
 
+    void DrawGauge(const char* label, double percentage, const ImVec4& color,
+                   const std::string& detail, bool available);
+    void DrawStatusPill(const char* text, const ImVec4& color);
+    void DrawCountChip(int count);
+
     std::string FormatBytes(uint64_t bytes) const;
-    static const char* StatusText(const ProcessInfo& proc, ImVec4& color);
+    std::string Ellipsize(const std::string& text, float maxWidth) const;
+    const char* StatusText(const ProcessInfo& proc, ImVec4& color) const;
+    bool MatchesSearch(const ProcessInfo& proc) const;
+
     static void DrawCenteredText(const char* text);
     static void DrawCenteredTextColored(const ImVec4& color, const char* text);
+    static void DrawRightAlignedText(const char* text);
+    static void DrawRightAlignedTextColored(const ImVec4& color, const char* text);
     void DrawAppIconFallback(float size) const;
     void DrawProcessIconFallback(const ProcessInfo& proc, float size) const;
 };

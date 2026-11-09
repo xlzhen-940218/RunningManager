@@ -358,7 +358,6 @@ void ProcessManager::RefreshProcesses() {
         info.isAdmin = (status.uid == 0);
         info.memoryUsageBytes = status.rssBytes;
         info.state = status.state;
-        info.isNotResponding = (status.state == 'Z');
         info.hasMainWindow = guiPids.find(pid) != guiPids.end();
 
         ProcTimes times;

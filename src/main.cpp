@@ -102,12 +102,8 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 
     // Theme initialization will be handled by UIManager
 
-    // Load custom font (Segoe UI)
-    ImFontConfig fontConfig;
-    fontConfig.OversampleH = 2;
-    fontConfig.OversampleV = 2;
-    // Load Chinese characters to display process names and usernames properly
-    io.Fonts->AddFontFromFileTTF("C:\\Windows\\Fonts\\segoeui.ttf", 18.0f, &fontConfig, io.Fonts->GetGlyphRangesChineseFull());
+    // Load the UI fonts (body, title and small sizes).
+    const UIFonts fonts = UIManager::LoadFonts(io, 1.0f);
 
     // Setup Platform/Renderer backends
     ImGui_ImplWin32_Init(hwnd);
@@ -122,7 +118,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
     processManager.Init(g_pd3dDevice);
     SystemMonitor systemMonitor;
     systemMonitor.Init(g_pd3dDevice);
-    UIManager uiManager(&processManager, &systemMonitor, appIconTexture);
+    UIManager uiManager(&processManager, &systemMonitor, appIconTexture, fonts, 1.0f);
 
     // Initial refresh
     processManager.RefreshProcesses();
@@ -162,7 +158,8 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 
         // Rendering
         ImGui::Render();
-        const float clear_color_with_alpha[4] = { 1.0f, 1.0f, 1.0f, 1.0f };
+        const ImVec4 clear = uiManager.GetBackgroundColor();
+        const float clear_color_with_alpha[4] = { clear.x, clear.y, clear.z, 1.0f };
         g_pd3dDeviceContext->OMSetRenderTargets(1, &g_mainRenderTargetView, nullptr);
         g_pd3dDeviceContext->ClearRenderTargetView(g_mainRenderTargetView, clear_color_with_alpha);
         ImGui_ImplDX11_RenderDrawData(ImGui::GetDrawData());

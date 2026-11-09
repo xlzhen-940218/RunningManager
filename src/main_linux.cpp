@@ -49,20 +49,6 @@ constexpr int kWindowWidth = 1020;
 constexpr int kWindowHeight = 720;
 constexpr int kIconSize = 64;
 
-struct FontCandidate {
-    const char* path;
-    int fontIndex;
-};
-
-const FontCandidate kFontCandidates[] = {
-    {"/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc", 2},
-    {"/usr/share/fonts/opentype/noto/NotoSansCJKsc-Regular.otf", 0},
-    {"/usr/share/fonts/truetype/wqy/wqy-microhei.ttc", 0},
-    {"/usr/share/fonts/truetype/wqy/wqy-zenhei.ttc", 0},
-    {"/usr/share/fonts/truetype/droid/DroidSansFallbackFull.ttf", 0},
-    {"/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", 0},
-};
-
 float RoundedRectCoverage(float px, float py, float left, float top, float right, float bottom,
                           float radius) {
     const float centerX = (left + right) * 0.5f;
@@ -175,25 +161,6 @@ void SetWindowIcon(SDL_Window* window) {
     }
 }
 
-ImFont* LoadUIFont(ImGuiIO& io, float uiScale) {
-    ImFontConfig config;
-    config.OversampleH = 2;
-    config.OversampleV = 2;
-    config.PixelSnapH = true;
-
-    for (const FontCandidate& candidate : kFontCandidates) {
-        if (access(candidate.path, R_OK) != 0) continue;
-
-        config.FontNo = candidate.fontIndex;
-        ImFont* font = io.Fonts->AddFontFromFileTTF(
-            candidate.path, 18.0f * uiScale, &config,
-            io.Fonts->GetGlyphRangesChineseSimplifiedCommon());
-        if (font) return font;
-    }
-
-    return io.Fonts->AddFontDefault();
-}
-
 float GetUiScale(int displayIndex) {
     float diagonalDpi = 0.0f;
     float horizontalDpi = 0.0f;
@@ -264,13 +231,17 @@ int main(int argc, char** argv) {
         displayIndex = 1;
     }
 
-    SDL_Rect displayBounds = {0, 0, kWindowWidth, kWindowHeight};
+    const float uiScale = GetUiScale(displayIndex);
+    const int windowWidth = static_cast<int>(kWindowWidth * uiScale);
+    const int windowHeight = static_cast<int>(kWindowHeight * uiScale);
+
+    SDL_Rect displayBounds = {0, 0, windowWidth, windowHeight};
     SDL_GetDisplayBounds(displayIndex, &displayBounds);
-    const int windowX = displayBounds.x + (displayBounds.w - kWindowWidth) / 2;
-    const int windowY = displayBounds.y + (displayBounds.h - kWindowHeight) / 2;
+    const int windowX = displayBounds.x + (displayBounds.w - windowWidth) / 2;
+    const int windowY = displayBounds.y + (displayBounds.h - windowHeight) / 2;
 
     SDL_Window* window = SDL_CreateWindow(
-        "RunningManager - Process Explorer", windowX, windowY, kWindowWidth, kWindowHeight,
+        "RunningManager - Process Explorer", windowX, windowY, windowWidth, windowHeight,
         SDL_WINDOW_OPENGL | SDL_WINDOW_RESIZABLE | SDL_WINDOW_ALLOW_HIGHDPI);
     if (!window) {
         std::fprintf(stderr, "RunningManager: SDL_CreateWindow failed: %s\n", SDL_GetError());
@@ -296,7 +267,8 @@ int main(int argc, char** argv) {
 
     SDL_GL_MakeCurrent(window, glContext);
     SDL_GL_SetSwapInterval(1);
-    SDL_SetWindowMinimumSize(window, 800, 560);
+    SDL_SetWindowMinimumSize(window, static_cast<int>(900 * uiScale),
+                             static_cast<int>(600 * uiScale));
     SetWindowIcon(window);
 
     // The original application always keeps its window on top.
@@ -324,9 +296,8 @@ int main(int argc, char** argv) {
     const std::string settingsPath = GetSettingsPath();
     io.IniFilename = settingsPath.empty() ? nullptr : settingsPath.c_str();
 
-    const float uiScale = GetUiScale(displayIndex);
     if (uiScale > 1.0f) ImGui::GetStyle().ScaleAllSizes(uiScale);
-    LoadUIFont(io, uiScale);
+    const UIFonts fonts = UIManager::LoadFonts(io, uiScale);
 
     ImGui_ImplSDL2_InitForOpenGL(window, glContext);
     ImGui_ImplOpenGL3_Init(glslVersion);
@@ -338,7 +309,7 @@ int main(int argc, char** argv) {
     processManager.Init();
     SystemMonitor systemMonitor;
     systemMonitor.Init();
-    UIManager uiManager(&processManager, &systemMonitor, appIcon);
+    UIManager uiManager(&processManager, &systemMonitor, appIcon, fonts, uiScale);
 
     processManager.RefreshProcesses();
     auto lastRefresh = std::chrono::steady_clock::now();
@@ -414,7 +385,8 @@ int main(int argc, char** argv) {
         int drawableHeight = 0;
         SDL_GL_GetDrawableSize(window, &drawableWidth, &drawableHeight);
         glViewport(0, 0, drawableWidth, drawableHeight);
-        glClearColor(0.96f, 0.96f, 0.96f, 1.0f);
+        const ImVec4 clearColor = uiManager.GetBackgroundColor();
+        glClearColor(clearColor.x, clearColor.y, clearColor.z, 1.0f);
         glClear(GL_COLOR_BUFFER_BIT);
         ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
 
