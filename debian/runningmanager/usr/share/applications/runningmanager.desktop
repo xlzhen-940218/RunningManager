@@ -1,0 +1,17 @@
+[Desktop Entry]
+Type=Application
+Name=RunningManager
+Name[zh_CN]=RunningManager 进程管理器
+GenericName=Process Manager
+GenericName[zh_CN]=进程管理器
+Comment=Manage processes and monitor system usage
+Comment[zh_CN]=管理进程并监控系统资源占用
+Exec=runningmanager
+TryExec=runningmanager
+Icon=runningmanager
+Terminal=false
+Categories=System;Monitor;
+Keywords=process;task;manager;monitor;cpu;memory;disk;gpu;
+Keywords[zh_CN]=进程;任务;管理器;监视器;系统;CPU;内存;磁盘;
+StartupNotify=true
+StartupWMClass=RunningManager

@@ -1,0 +1,21 @@
+Package: runningmanager
+Version: 1.1.0-1
+Architecture: arm64
+Maintainer: droid <droid@example.com>
+Installed-Size: 954
+Depends: libc6 (>= 2.38), libgcc-s1 (>= 3.0), libopengl0, libsdl2-2.0-0 (>= 2.0.16), libstdc++6 (>= 9), libx11-6, xdg-utils
+Recommends: fonts-noto-cjk | fonts-wqy-microhei
+Suggests: xdotool
+Section: utils
+Priority: optional
+Homepage: https://github.com/xlzhen-940218/RunningManager
+Description: lightweight process manager and system monitor
+ RunningManager is a desktop process manager and system monitor built with
+ Dear ImGui. It lists running processes with PID, status, user, elevated
+ privileges, CPU and memory usage, and supports sorting, searching, killing
+ processes, bringing application windows to the front, and opening the
+ executable location.
+ .
+ The system summary shows CPU, memory, disk and, when supported by the
+ driver, GPU usage. The UI is available in light blue and light pink themes
+ and automatically uses a CJK font when one is installed.

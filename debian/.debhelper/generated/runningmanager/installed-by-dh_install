@@ -1,0 +1,8 @@
+debian/tmp/usr/bin/runningmanager
+./debian/runningmanager.desktop
+./debian/runningmanager.svg
+./debian/icons/32x32/runningmanager.png
+./debian/icons/48x48/runningmanager.png
+./debian/icons/64x64/runningmanager.png
+./debian/icons/128x128/runningmanager.png
+./debian/icons/256x256/runningmanager.png

@@ -1,0 +1,12 @@
+Package: runningmanager-dbgsym
+Source: runningmanager
+Version: 1.1.0-1
+Auto-Built-Package: debug-symbols
+Architecture: arm64
+Maintainer: droid <droid@example.com>
+Installed-Size: 3138
+Depends: runningmanager (= 1.1.0-1)
+Section: debug
+Priority: optional
+Description: debug symbols for runningmanager
+Build-Ids: ee1cc0616f0ff2b99dba32930f76632fa9bdb275
